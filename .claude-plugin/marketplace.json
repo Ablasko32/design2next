@@ -1,0 +1,17 @@
+{
+  "name": "design-to-next",
+  "owner": {
+    "name": "Antonio Blašković"
+  },
+  "metadata": {
+    "description": "Design 2 Next: turn designs into structured, production-minded Next.js projects."
+  },
+  "plugins": [
+    {
+      "name": "design-to-next",
+      "source": "./",
+      "description": "Turn designs into structured, production-minded Next.js projects.",
+      "version": "1.0.0"
+    }
+  ]
+}
