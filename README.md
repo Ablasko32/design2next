@@ -1,13 +1,14 @@
 <div align="center">
 
-<img src="github/design2next-cover.png" alt="Design 2 Next cover" width="100%" />
+<img src="github/design2next-cover.png" alt="design2next: turn any design artifact into an opinionated Next.js project" width="100%" />
 
-# Design 2 Next
+# **design2next**
 
-### From design artifact to a thoughtful, production-minded Next.js project.
+### Turn any design artifact into an opinionated Next.js project.
 
-Turn Claude Design exports, HTML/CSS, Figma files, and screenshots into a clear plan—and then into structured Next.js code, without losing the design along the way.
+Hand your coding agent an HTML/CSS design (from tools like Claude Design, Open Design and others), a Figma file or a screenshot. It comes back with a structured, production-minded Next.js codebase that follows the design.
 
+[![Next.js](https://img.shields.io/badge/Next.js-000000?logo=nextdotjs&logoColor=white)](https://nextjs.org)
 [![MIT License](https://img.shields.io/badge/license-MIT-2ea44f.svg)](LICENCE)
 [![Agent-agnostic skill](https://img.shields.io/badge/agent-agnostic-6e56cf.svg)](skills/design-to-next/SKILL.md)
 
@@ -15,70 +16,88 @@ Turn Claude Design exports, HTML/CSS, Figma files, and screenshots into a clear 
 
 ---
 
-Design 2 Next is an **opinionated, agent-agnostic skill** for building Next.js projects from designs. It gives your coding agent a consistent stack, a practical project structure, and a design-to-code workflow—from extracting design values to checking the finished build.
+## What it is
 
-The skill uses the standard `SKILL.md` format, so its instructions are not tied to Claude Code or a specific model. Use it with any compatible coding agent that supports this skill format; setup steps and available integrations depend on the host agent.
+**design2next** is a skill for AI coding agents. It's a set of instructions, playbooks and check scripts that tells the agent:
 
-It is opinionated about **how the project is built**, but selective about **what the project needs**: optional features and infrastructure stay out until the design or your requirements call for them.
+- **how to read a design**: exact values from HTML/CSS, estimates from screenshots
+- **which stack to use**: always the same, so every project looks familiar
+- **where every file goes**: a different structure for a landing page, a webshop and an app
+- **what to check before calling it done**: responsive, accessible, typed, linted, built
 
-## 🧭 The workflow
+It's **opinionated about how** things are built and **lean about what** gets built. A database, auth, payments, a CMS or translations are only added when the design or you ask for them.
 
-```text
-Design input
-    ↓
-Read the design and identify its tokens, content, and open questions
-    ↓
-Build a structured Next.js app that follows the design
-    ↓
-Check responsiveness, accessibility, and project quality
+It uses the standard `SKILL.md` format, so it works with Claude Code and with any other agent that supports skills.
+
+## How it works
+
+```mermaid
+flowchart LR
+    A["🎨 Design<br/>HTML/CSS · Figma<br/>screenshot"] --> B["🔍 Read<br/>tokens, fonts,<br/>copy, sections"]
+    B --> C["🗂️ Structure<br/>landing, shop<br/>or app"]
+    C --> D["🛠️ Build<br/>tokens → UI →<br/>pages"]
+    D --> E["✅ Verify<br/>3 screen sizes<br/>check.sh · build"]
 ```
 
-## What you get
+> **Default is `check` mode:** the agent builds the first slice (setup, tokens, fonts, hero), shows you screenshots and **waits for your OK** before building the rest. Use `auto` to go straight through; it lists every assumption at the end.
 
-- **A design-first process.** Treats the design as the source of truth for its content, layout, and visual details. Exact exports are read as exact; screenshots are treated as estimates.
-- **A consistent modern stack.** Next.js App Router, strict TypeScript, Tailwind CSS, and a deliberate approach to caching, components, fonts, images, forms, and data.
-- **A maintainable structure.** Separates routes, reusable UI, page sections, constants, assets, and server-side code—without scaffolding folders or dependencies the project does not use.
-- **Responsive, accessible implementation.** Starts mobile-first and includes practical guidance for keyboard focus, semantic HTML, labels, and reduced motion.
-- **Useful guardrails.** Covers design tokens, image handling, environment variables, server/client boundaries, SEO, and project checks.
-- **Optional playbooks.** Focused references for dark mode, translations, SEO, authentication, payments, and EU legal requirements. These stay off unless they're relevant.
+## Design inputs
 
-## 🎨 Design inputs
+| Input                                                                                        | How it's used                                                                                                                                            |
+| -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **HTML/CSS artifact or export** (main input): Claude Design, Open Design, any tool or folder | Reads markup, styles, fonts, assets and copy. **Exact values**. Markup is never copied as-is: repeated patterns become components, values become tokens. |
+| **Figma**                                                                                    | Uses Figma tooling if your agent has it; otherwise asks for an export or the missing values.                                                             |
+| **Screenshot, image or PDF**                                                                 | Estimates values and tells you which ones are estimates.                                                                                                 |
 
-| Input                                      | How the skill uses it                                                                  |
-| ------------------------------------------ | -------------------------------------------------------------------------------------- |
-| Claude Design or another HTML/CSS artifact | Reads the markup, styles, assets, fonts, and copy to capture exact values              |
-| Local HTML/CSS export                      | Inspects the exported files and assets, then rebuilds them using the project structure |
-| Figma                                      | Uses available design tooling; otherwise asks for an export or missing design values   |
-| Screenshot, image, or PDF                  | Estimates visual values and calls out what is estimated or missing                     |
+The design is the source of truth. The agent doesn't "improve" it: odd spacing or low contrast is built as designed and listed for you at the end.
 
-The design informs the implementation; exported markup is not copied wholesale. Repeated patterns become reusable components, and design values become tokens.
+## The stack
 
-## Opinionated by design
+Always:
 
-The skill establishes clear defaults while keeping projects lean:
+| Area           | What we use                                                        |
+| -------------- | ------------------------------------------------------------------ |
+| Framework      | **Next.js** (latest, App Router, Cache Components)                 |
+| Language       | **TypeScript** (strict)                                            |
+| Styling        | **Tailwind CSS v4**, design tokens as CSS variables                |
+| Components     | Own UI components, **cva** for variants, `cn()` for classes        |
+| Fonts & images | `next/font` (Google Fonts self-hosted), `next/image` with **WebP** |
+| Forms          | **react-hook-form** + **Zod**, Server Actions                      |
+| Quality        | **ESLint** + **Prettier**, typecheck, `check.sh`                   |
 
-- **App Router, TypeScript, and Tailwind CSS** for the application foundation.
-- **Server Components by default**; client code only where interaction needs it.
-- **Design tokens first**; components use semantic tokens rather than scattered raw design values.
-- **Purposeful structure** for routes, UI primitives, sections, shared constants, and assets.
-- **`next/image` and WebP** for project imagery, with exceptions for formats that need to remain compatible.
-- **CSS-first animation** and accessible interaction patterns.
-- **Conditional infrastructure:** add a database, authentication, payments, email, dark mode, translations, or SEO only when the project calls for it.
-- **Current Next.js documentation first** whenever an implementation depends on a Next.js API.
+Only when the project needs it:
 
-These are defaults for the coding agent to follow—not a claim that the skill generates or tests an entire app automatically.
+| Need         | What we use                                                                                 |
+| ------------ | ------------------------------------------------------------------------------------------- |
+| Database     | **Drizzle ORM**, PostgreSQL by default (MySQL, SQLite too), local **Docker** or your own DB |
+| Auth         | **Better Auth**                                                                             |
+| Payments     | **Stripe**                                                                                  |
+| CMS          | **Payload** (blogs, pages, shop products)                                                   |
+| Icons        | **lucide-react** by default (you can pick another set)                                      |
+| Animation    | CSS first, **motion** only where CSS can't                                                  |
+| Translations | Native Next.js dictionaries (+ Payload localization for CMS content)                        |
+| Dark mode    | **next-themes**                                                                             |
+| SEO          | Metadata API, sitemap, robots, JSON-LD with **schema-dts**                                  |
+| Cookies (EU) | **Cookiebot** when a consent banner is needed                                               |
+| Email        | Your choice (Resend, Postmark, Brevo...); the agent asks                                    |
 
-## 🚀 Get started with Claude Code
+## Project types
 
-### Option 1: install as a plugin (recommended)
+The type decides the folder structure. Pass it, or let the agent work it out from the design.
 
-In Claude Code (2.1.275 or later):
+| Type      | For                             | Structure                                                                                                                  |
+| --------- | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `landing` | Marketing site, portfolio, blog | Pages made of `components/sections/`, one Server Action per form                                                           |
+| `shop`    | Webshop                         | **Feature-first**: `features/<domain>/` with its queries, actions, schemas and components. Cached catalog, Stripe checkout |
+| `app`     | SaaS, dashboard, admin          | Same feature-first layout, plus a shared session helper, an action helper and central cache tags                           |
 
-```text
-/plugin install design-to-next --marketplace Ablasko32/design2next
-```
+Every type: no `src/`, `app/` only holds routes, and nothing gets scaffolded that the project doesn't use.
 
-Or add the marketplace first, then install:
+## Get started
+
+### Install
+
+**As a Claude Code plugin** (recommended, Claude Code 2.1.275+):
 
 ```text
 /plugin marketplace add Ablasko32/design2next
@@ -87,82 +106,79 @@ Or add the marketplace first, then install:
 
 Updates arrive through the marketplace.
 
-### Option 2: copy the skill into a project
+**Or copy the skill** into any project:
 
-1. Clone this repository.
-2. From the directory containing this README, copy the skill folder into your project's `.claude/skills/`:
-
-   ```bash
-   mkdir -p /path/to/your-next-project/.claude/skills
-   cp -R skills/design-to-next /path/to/your-next-project/.claude/skills/
-   ```
-
-   Replace `/path/to/your-next-project` with your Next.js project's path.
-
-### Use it
-
-Run the skill with a mode and the design:
-
-```text
-/design-to-next [auto|check] <design>
+```bash
+git clone https://github.com/Ablasko32/design2next
+mkdir -p /path/to/your-project/.claude/skills
+cp -R design2next/skills/design-to-next /path/to/your-project/.claude/skills/
 ```
 
-When installed as a plugin, the command is `/design-to-next:design-to-next`.
+For other agents, put `skills/design-to-next/` wherever your agent loads skills from.
 
-`<design>` can be:
+### Use
 
-- a claude.ai artifact URL (Claude Design or any HTML artifact)
-- a local HTML file, image or PDF
-- a folder with an HTML/CSS export
+```text
+/design-to-next [auto|check] [landing|shop|app] <design> [extra context...]
+```
 
-| Mode              | What it does                                                                                                                                                                                                                       |
-| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `check` (default) | Builds a small first slice (setup, tokens, fonts and the hero), shows you screenshots at mobile, tablet and desktop, and **asks before building the rest**. Best for a new design: you catch wrong fonts, colors or spacing early. |
-| `auto`            | Builds the whole project without stopping. Open questions (icon set, email service, missing fonts...) are answered with sensible defaults, and every assumption is listed in the final summary.                                    |
+As a plugin, the command is `/design-to-next:design-to-next`.
 
-Examples:
+- **`<design>`**: an artifact link, a local `.html` / image / PDF, or a folder with an HTML/CSS export
+- **`check`** (default): builds setup, tokens, fonts and the hero first, shows you screenshots and **waits for your OK**. Catches wrong fonts or colors early.
+- **`auto`**: builds everything in one go, picks sensible defaults and lists every assumption at the end
+- **Extra context**: anything after the design, in plain words (pages, features, services)
 
 ```text
 /design-to-next https://claude.ai/artifact/…
 /design-to-next auto ./design-export
-/design-to-next check ./mockups/home.png
+/design-to-next shop ./shop.html products from a CMS, guest checkout
+/design-to-next app ./dashboard.html team accounts, projects CRUD, Resend for email
 ```
 
-You can also just ask in plain words, for example:
+Or just ask: _"Use design2next to turn this design into a Next.js landing page. Show me what you found first."_
 
-> Use the Design 2 Next skill to turn this design into a responsive Next.js landing page. First inspect the design and tell me what you found.
+## Scripts
 
-The skill's instructions and supporting references are in [`skills/design-to-next/`](skills/design-to-next/).
+Two helpers ship with the skill. The agent runs them from your project root, and you can run them too.
 
-## 🛠️ Scripts
-
-The skill ships two helper scripts. The agent runs them from the root of your Next.js project; you can run them yourself too.
-
-| Script                                                     | What it does                                                                                                                                                                                                                                                                                                                   | Needs                                     |
-| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------- |
-| [`check.sh`](skills/design-to-next/scripts/check.sh)       | Checks most of the final checklist automatically: structure, tokens, client/server boundaries, images, env, SEO basics, auth and Stripe safety. Then runs the `typecheck`, `lint` and `format:check` scripts. `--fast` skips the commands, `--build` also runs the build. Exits with `1` on any error, so it also works in CI. | bash, the project's package manager       |
-| [`to-webp.mjs`](skills/design-to-next/scripts/to-webp.mjs) | Converts PNG / JPG / GIF / TIFF images to WebP (default folder `assets/images`). Keeps SVG, animated GIFs and files in `app/` / `public/`. `--replace` deletes the originals.                                                                                                                                                  | Node.js, `sharp` (installed with Next.js) |
+| Script                                                     | What it does                                                                                                                                                                                                                    |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`check.sh`](skills/design-to-next/scripts/check.sh)       | Checks structure, tokens, server/client boundaries, images, env, database, CMS, SEO basics, auth and Stripe safety. Then runs typecheck, lint and format check (`--build` also builds). Exits `1` on errors, so it works in CI. |
+| [`to-webp.mjs`](skills/design-to-next/scripts/to-webp.mjs) | Converts PNG / JPG / GIF / TIFF in `assets/images` to WebP (`--replace` removes the originals).                                                                                                                                 |
 
 ```bash
 bash .claude/skills/design-to-next/scripts/check.sh --build
 node .claude/skills/design-to-next/scripts/to-webp.mjs assets/images --replace
 ```
 
-The checks are line-based heuristics: they catch the common mistakes, not every one. Design match, console errors and content quality are still checked by hand.
+`check.sh` is a fast heuristic, not a proof: it catches the common mistakes. Matching the design and the quality of the content are still checked by eye.
 
-## 📚 Project playbooks
+## Playbooks
 
-The core skill is supported by focused references:
+The agent only reads the ones a project needs.
 
-- [`design-input.md`](skills/design-to-next/references/design-input.md) — reading exports, Figma, and screenshots
-- [`tokens.md`](skills/design-to-next/references/tokens.md) — extracting and organizing design tokens
-- [`seo.md`](skills/design-to-next/references/seo.md) — public-page SEO
-- [`auth.md`](skills/design-to-next/references/auth.md) — authentication
-- [`payments.md`](skills/design-to-next/references/payments.md) — Stripe payments
-- [`i18n.md`](skills/design-to-next/references/i18n.md) — translations
-- [`dark-mode.md`](skills/design-to-next/references/dark-mode.md) — dark mode
-- [`legal-eu.md`](skills/design-to-next/references/legal-eu.md) — EU privacy and legal considerations
+**Always**
 
-## ⚖️ License
+- [`design-input.md`](skills/design-to-next/references/design-input.md): reading HTML/CSS exports, Figma and screenshots
+- [`tokens.md`](skills/design-to-next/references/tokens.md): turning design values into tokens
 
-**Design 2 Next** is available under the [MIT License](LICENCE).
+**Structure** (one per project)
+
+- [`structure-landing.md`](skills/design-to-next/references/structure-landing.md): landing pages, portfolios, blogs
+- [`structure-app.md`](skills/design-to-next/references/structure-app.md): webshops and apps, feature-first
+
+**When needed**
+
+- [`database.md`](skills/design-to-next/references/database.md): picking a database, local Docker or your own connection
+- [`auth.md`](skills/design-to-next/references/auth.md): Better Auth
+- [`payments.md`](skills/design-to-next/references/payments.md): Stripe
+- [`cms.md`](skills/design-to-next/references/cms.md): Payload CMS
+- [`i18n.md`](skills/design-to-next/references/i18n.md): translations, including CMS content
+- [`seo.md`](skills/design-to-next/references/seo.md): SEO for public pages
+- [`dark-mode.md`](skills/design-to-next/references/dark-mode.md): dark mode
+- [`legal-eu.md`](skills/design-to-next/references/legal-eu.md): GDPR, cookies and legal pages
+
+## License
+
+[MIT](LICENCE)

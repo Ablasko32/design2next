@@ -2,7 +2,7 @@
 
 Read when project has **public pages**: landing, webshop (products, categories), blog. Apps, dashboards, pages behind login → only SKILL.md SEO basics.
 
-SKILL.md rules still apply; this adds SEO. Translations on → also SEO part of `references/i18n.md`.
+SKILL.md rules still apply; this adds SEO. Translations on → also SEO part of `references/i18n.md`. CMS content → meta fields from `@payloadcms/plugin-seo` (`references/cms.md`), rules below still apply.
 
 ## 1. Before starting
 
@@ -14,7 +14,7 @@ SKILL.md rules still apply; this adds SEO. Translations on → also SEO part of 
 
 ```
 app/
-  layout.tsx            metadataBase, title template, default OG / Twitter
+  layout.tsx            root layout (SKILL.md section 4): metadataBase, title template, default OG / Twitter
   sitemap.ts
   robots.ts
   opengraph-image.tsx   default OG image (or a static opengraph-image.png)
@@ -27,7 +27,7 @@ constants/
 
 ## 3. Metadata
 
-- Root `app/layout.tsx`: `metadataBase` (url from `constants/site.ts`), title template `"%s | <Site>"`, default title, description, `openGraph`, `twitter`, `robots`, `alternates.canonical`.
+- Root layout: `metadataBase` (url from `constants/site.ts`), title template `"%s | <Site>"`, default title, description, `openGraph`, `twitter`, `robots`, `alternates.canonical`.
 - **Every** public `page.tsx` exports `metadata` or `generateMetadata`. Dynamic routes: `generateMetadata` with real data.
 - SEO text in `constants/seo.ts` (dictionary when translations on).
 
@@ -81,8 +81,8 @@ export function JsonLd<T extends Thing>({ data }: { data: WithContext<T> }) {
 
 ## 8. Sitemap and robots
 
-- `app/sitemap.ts`: every public route, with `lastModified`. Dynamic routes (products, categories, posts) from DB. Huge shops: split with `generateSitemaps` (check docs).
-- `app/robots.ts`: allow public, disallow `/api/` and private routes, point to sitemap.
+- `app/sitemap.ts`: every public route, with `lastModified`. Dynamic routes (products, categories, posts) from DB or CMS (cached queries). Huge shops: split with `generateSitemaps` (check docs).
+- `app/robots.ts`: allow public, disallow `/api/`, private routes and CMS admin (`/admin`), point to sitemap.
 - Pages behind login: not in sitemap, disallowed here.
 
 ## 9. Checklist

@@ -1,7 +1,7 @@
 {
   "name": "design-to-next",
   "version": "1.0.0",
-  "description": "Opinionated Claude Code skill for turning designs (Claude Design / HTML-CSS artifacts, Open Design, Figma, screenshots) into structured, production-minded Next.js projects.",
+  "description": "Opinionated skill that turns any design artifact (HTML/CSS from tools like Claude Design or Open Design, Figma, screenshots) into a structured, production-minded Next.js project.",
   "author": {
     "name": "Antonio Blašković"
   },
@@ -9,9 +9,14 @@
   "keywords": [
     "nextjs",
     "design-to-code",
+    "html-to-nextjs",
     "tailwind",
+    "drizzle",
+    "better-auth",
+    "payload",
     "claude-design",
-    "landing-page",
+    "open-design",
+    "figma",
     "skill"
   ],
   "homepage": "https://github.com/Ablasko32/design2next",

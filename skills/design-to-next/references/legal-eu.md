@@ -20,12 +20,12 @@ Go through project, list each that applies + short fix note:
 
 Propose each that applies; build only after user agrees. Content from user (or their generator / lawyer). Claude draft → marked as draft for review.
 
-| Page | When | Notes |
-| --- | --- | --- |
-| Privacy policy (`/privacy`) | Any personal data processed (forms, analytics, accounts, orders) | Who, what data, why, legal basis, processors, retention, user rights, contact |
-| Cookie policy (`/cookies`) | Any non-essential cookie / similar storage | Cookie list; Cookiebot can generate it from its declaration |
-| Impressum / legal notice (`/impressum`) | Business site. Required in some EU countries (e.g. Germany, Austria); most EU e-commerce laws require provider details somewhere | Company name, address, registration no., VAT id, contact, responsible person |
-| Terms and conditions | Webshop, paid service, accounts | Webshop: delivery, payment, 14-day withdrawal right, complaints |
+| Page                                    | When                                                                                                                             | Notes                                                                         |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Privacy policy (`/privacy`)             | Any personal data processed (forms, analytics, accounts, orders)                                                                 | Who, what data, why, legal basis, processors, retention, user rights, contact |
+| Cookie policy (`/cookies`)              | Any non-essential cookie / similar storage                                                                                       | Cookie list; Cookiebot can generate it from its declaration                   |
+| Impressum / legal notice (`/impressum`) | Business site. Required in some EU countries (e.g. Germany, Austria); most EU e-commerce laws require provider details somewhere | Company name, address, registration no., VAT id, contact, responsible person  |
+| Terms and conditions                    | Webshop, paid service, accounts                                                                                                  | Webshop: delivery, payment, 14-day withdrawal right, complaints               |
 
 - Links in footer (`constants/navigation.ts`).
 - Public pages with own title + description (`references/seo.md`); `noindex` usually **not** needed.
@@ -35,7 +35,7 @@ Propose each that applies; build only after user agrees. Content from user (or t
 
 - **Strictly necessary** (session, cart, CSRF, language choice, consent itself): no consent needed.
 - **Analytics / marketing**: consent **before** they're set.
-- Banner needed → propose **Cookiebot**. Load in `app/layout.tsx` via `next/script` before other third-party scripts, ID from `lib/env-public.ts` (`NEXT_PUBLIC_COOKIEBOT_ID`). Third-party scripts blocked until consent (Cookiebot auto-blocking or `data-cookieconsent` per script). Check Cookiebot docs for current setup.
+- Banner needed → propose **Cookiebot**. Load in root layout (SKILL.md section 4) via `next/script` before other third-party scripts, ID from `lib/env-public.ts` (`NEXT_PUBLIC_COOKIEBOT_ID`). Third-party scripts blocked until consent (Cookiebot auto-blocking or `data-cookieconsent` per script). Check Cookiebot docs for current setup.
 - User wants only simple analytics → mention **cookieless** analytics, usually no banner needed (still in privacy policy). User decides.
 - Banner look = Cookiebot's. Design has a banner → tell user to match its style in Cookiebot admin.
 - Nothing non-essential → no banner. Never "just in case".

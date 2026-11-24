@@ -1,7 +1,7 @@
 ---
 name: design-to-next
-description: Rules for building Next.js projects (landing pages, webshops, apps) and for turning a design into Next.js code. Use this skill whenever creating a new Next.js project, adding pages, components or sections to one, translating a design into Next.js (Claude Design or other HTML/CSS artifact or export, Open Design, Figma, mockup, screenshot), or setting up styling, tokens, fonts, images, icons, forms, email, database, auth (Better Auth), payments (Stripe), SEO, translations, dark mode, cookies / GDPR or legal pages in a Next.js app.
-argument-hint: "[auto|check] <design: claude.ai artifact URL, file or folder path>"
+description: Rules for building Next.js projects (landing pages, webshops, apps) and for turning a design into Next.js code. Use this skill whenever creating a new Next.js project, adding pages, components or sections to one, translating a design into Next.js (Claude Design or other HTML/CSS artifact or export, Open Design, Figma, mockup, screenshot), or setting up styling, tokens, fonts, images, icons, forms, email, database, auth (Better Auth), payments (Stripe), CMS (Payload), SEO, translations, dark mode, cookies / GDPR or legal pages in a Next.js app.
+argument-hint: "[auto|check] [landing|shop|app] <design: claude.ai artifact URL, file or folder path> [extra context...]"
 license: MIT
 metadata:
   author: Antonio Blašković
@@ -16,10 +16,12 @@ Fixed stack and structure for every Next.js project. Follow unless user says oth
 
 Arguments: `$ARGUMENTS`
 
-Format: `[auto|check] <design>`. Both optional, any order.
+Format: `[auto|check] [landing|shop|app] <design> [extra context...]`. Mode and type optional, any order before design.
 
 - **`<design>`**: claude.ai artifact URL (Claude Design or any HTML artifact), local file (`.html`, image, PDF) or folder (HTML/CSS export). Read per `references/design-input.md`. None given → ask. (Only applying rules to existing code → no design needed.)
 - **Mode**: default **`check`**.
+- **Type**: `landing`, `shop` or `app`. See "Project type" below.
+- **Extra context**: free text after design = user's notes (pages, features, services, wishes). Counts as user instructions: beats `auto` defaults.
 
 | Mode    | What happens                                                                                                                                                                                                                                                                                     |
 | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -35,23 +37,42 @@ Format: `[auto|check] <design>`. Both optional, any order.
 - Font not on Google Fonts, no file in export: system font stack as placeholder, listed. Never another named font.
 - EU legal: GDPR issues and needed pages **listed**, not built.
 - Missing copy / images: keep as in design, list placeholders.
+- CMS: only if user asked. Media storage: local + listed in summary.
+- Database: PostgreSQL in local Docker; no Docker → empty `DATABASE_URL` + `TODO`, listed.
 
 User's explicit instructions beat these defaults.
+
+## Project type
+
+Decide **before any code**. Type picks the folder structure.
+
+| Type      | What                                                 | Structure (read exactly one)      | Usually also                                            |
+| --------- | ---------------------------------------------------- | --------------------------------- | ------------------------------------------------------- |
+| `landing` | Marketing site, portfolio, blog / content site       | `references/structure-landing.md` | SEO, EU legal, CMS (blog)                               |
+| `shop`    | Webshop: catalog, cart, checkout                     | `references/structure-app.md`     | SEO, payments, auth, database, EU legal, CMS (products) |
+| `app`     | SaaS, dashboard, admin, portal: accounts, data, CRUD | `references/structure-app.md`     | auth, database                                          |
+
+- Type in arguments → use it.
+- Else infer from design + extra context: cart, prices, checkout → `shop`; sign-in, dashboard, tables, CRUD forms → `app`; else `landing`.
+- Unclear → ask. `auto`: pick by design, list in summary.
+- Existing project: follow its structure (`features/` → app, `components/sections/` only → landing). Landing growing into shop / app → ask before restructuring.
 
 ## Optional features (references)
 
 Design job → always read `references/design-input.md`.
 
-Features below are **off by default**. Read the reference only when needed; follow it on top of this file:
+Features below are **off by default**. Read the reference only when needed; follow it on top of this file. Auth, payments (with orders) and CMS need a database → also `references/database.md`.
 
-| Feature      | When                                                             | Read                      |
-| ------------ | ---------------------------------------------------------------- | ------------------------- |
-| Dark mode    | Design has dark version, or user asks                            | `references/dark-mode.md` |
-| Translations | User asks, or design shows language switcher / several languages | `references/i18n.md`      |
-| SEO          | Public pages: landing, webshop, blog                             | `references/seo.md`       |
-| Auth         | Sign-in needed (accounts, dashboard, admin)                      | `references/auth.md`      |
-| Payments     | Takes payments (webshop, paid plans)                             | `references/payments.md`  |
-| EU legal     | Site run from / targets EU (ask once if unclear)                 | `references/legal-eu.md`  |
+| Feature      | When                                                                         | Read                      |
+| ------------ | ---------------------------------------------------------------------------- | ------------------------- |
+| Dark mode    | Design has dark version, or user asks                                        | `references/dark-mode.md` |
+| Translations | User asks, or design shows language switcher / several languages             | `references/i18n.md`      |
+| SEO          | Public pages: landing, webshop, blog                                         | `references/seo.md`       |
+| Database     | Data must be stored (auth, CMS, orders, app data)                            | `references/database.md`  |
+| Auth         | Sign-in needed (accounts, dashboard, admin)                                  | `references/auth.md`      |
+| Payments     | Takes payments (webshop, paid plans)                                         | `references/payments.md`  |
+| EU legal     | Site run from / targets EU (ask once if unclear)                             | `references/legal-eu.md`  |
+| CMS          | User asks for CMS / content edited by non-developers (blog, pages, products) | `references/cms.md`       |
 
 Design hints at a feature (theme toggle, language switcher) but user never mentioned it → ask before adding.
 
@@ -72,29 +93,31 @@ Design hints at a feature (theme toggle, language switcher) but user never menti
 
 ## 3. Stack
 
-| Area          | Choice                                                              |
-| ------------- | ------------------------------------------------------------------- |
-| Framework     | Next.js latest, App Router only                                     |
-| Language      | TypeScript, `strict: true`                                          |
-| Styling       | Tailwind CSS latest (v4, CSS-first config)                          |
-| Caching       | Cache Components (`cacheComponents: true`)                          |
-| Class merge   | `cn()` = `clsx` + `tailwind-merge`                                  |
-| Variants      | `class-variance-authority` (cva)                                    |
-| Fonts         | `next/font`, always. `next/font/google` whenever font is there      |
-| Images        | `next/image`, always. Files as WebP                                 |
-| Icons         | Ask user (section 7, Icons)                                         |
-| Animation     | CSS first. `motion` only when CSS can't                             |
-| Forms         | react-hook-form + Zod (`@hookform/resolvers`)                       |
-| Mutations     | Server Actions                                                      |
-| ORM           | Drizzle, only with a database                                       |
-| Email         | Only when a form needs it. Ask which service (section 8)            |
-| Auth          | Better Auth, only when needed → `references/auth.md`                |
-| Payments      | Stripe, only when needed → `references/payments.md`                 |
-| Tests         | None, unless user asks                                              |
-| Lint / format | ESLint + Prettier                                                   |
-| UI library    | Own components in `components/ui/`. shadcn/ui **only if user asks** |
-| Dark mode     | Only if design has it / user asks → `references/dark-mode.md`       |
-| Translations  | Only if several languages → `references/i18n.md`                    |
+| Area          | Choice                                                                           |
+| ------------- | -------------------------------------------------------------------------------- |
+| Framework     | Next.js latest, App Router only                                                  |
+| Language      | TypeScript, `strict: true`                                                       |
+| Styling       | Tailwind CSS latest (v4, CSS-first config)                                       |
+| Caching       | Cache Components (`cacheComponents: true`)                                       |
+| Class merge   | `cn()` = `clsx` + `tailwind-merge`                                               |
+| Variants      | `class-variance-authority` (cva)                                                 |
+| Fonts         | `next/font`, always. `next/font/google` whenever font is there                   |
+| Images        | `next/image`, always. Files as WebP                                              |
+| Icons         | Ask user (section 7, Icons)                                                      |
+| Animation     | CSS first. `motion` only when CSS can't                                          |
+| Forms         | react-hook-form + Zod (`@hookform/resolvers`)                                    |
+| Mutations     | Server Actions                                                                   |
+| Database      | PostgreSQL default (MySQL, SQLite, Mongo for Payload) → `references/database.md` |
+| ORM           | Drizzle, only with a database                                                    |
+| Email         | Only when a form needs it. Ask which service (section 8)                         |
+| Auth          | Better Auth, only when needed → `references/auth.md`                             |
+| Payments      | Stripe, only when needed → `references/payments.md`                              |
+| CMS           | Payload 3.x (≥ 3.81), only when needed → `references/cms.md`                     |
+| Tests         | None, unless user asks                                                           |
+| Lint / format | ESLint + Prettier                                                                |
+| UI library    | Own components in `components/ui/`. shadcn/ui **only if user asks**              |
+| Dark mode     | Only if design has it / user asks → `references/dark-mode.md`                    |
+| Translations  | Only if several languages → `references/i18n.md`                                 |
 
 ### Package manager
 
@@ -133,65 +156,12 @@ Run `<pm> create next-app@latest --help` first (flags change). Then run **non-in
 
 ## 4. Folder structure
 
-No `src/`. `app/` = **routing files only**. Everything else outside.
-
-```
-app/
-  layout.tsx            root layout, fonts, global metadata
-  globals.css           tokens + Tailwind theme (section 6)
-  favicon.ico
-  sitemap.ts            only with SEO (references/seo.md)
-  robots.ts             only with SEO
-  loading.tsx           always (general fallback)
-  error.tsx             always (general fallback)
-  global-error.tsx
-  not-found.tsx
-  (marketing)/          route group, only when it helps
-    page.tsx
-    about/
-      page.tsx
-      loading.tsx       only if route needs its own
-      error.tsx         only if route needs its own
-  api/                  only for webhooks / external API
-    auth/[...all]/      only with auth (references/auth.md)
-    webhooks/stripe/    only with payments (references/payments.md)
-assets/
-  images/               statically imported images, by section, WebP
-  fonts/                only for fonts not on Google Fonts (woff2)
-components/
-  ui/                   primitives: button, input, card, badge...
-  sections/             page sections: hero, features, pricing, faq...
-  layout/               header, footer, nav
-  providers/            client context providers (theme...), only when needed
-  icons/                custom SVG icons from design, only if any
-  seo/                  json-ld.tsx, only with SEO
-lib/
-  utils.ts              cn() and small helpers
-  validations/          Zod schemas
-  actions/              Server Actions ("use server"), only with forms / writes
-  queries/              cached reads ("use cache"), only with data to read
-  db/                   only with a database
-    index.ts            Drizzle client
-    schema.ts           Drizzle schema
-  auth.ts               Better Auth server config, only with auth
-  auth-client.ts        Better Auth client, only with auth
-  stripe.ts             Stripe client, only with payments
-  env.ts                server env, only when env used
-  env-public.ts         NEXT_PUBLIC_ env, only when needed
-constants/
-  site.ts               site name, url, socials, contact
-  navigation.ts         nav and footer links
-  images.ts             every image the app uses
-  seo.ts                titles, descriptions, keywords per page, only with SEO
-types/
-public/                 only files needing a fixed URL (OG image, robots, verification)
-.env.example            committed, keys only (only when env used)
-.env.local              gitignored, real values (only when env used)
-drizzle.config.ts       only with a database
-```
+**Full tree = structure reference of the project type** (see "Project type"): `references/structure-landing.md` or `references/structure-app.md`. Read it before creating folders. Rules below apply to both.
 
 Rules:
 
+- **No `src/`.** `app/` = **routing files only**. Everything else outside (`components/`, `lib/`, `constants/`, `assets/`, `types/`, `features/` for shop / app, `cms/` with CMS).
+- **Root layout** (`<html>`, fonts, providers, global metadata) = `app/layout.tsx`. With i18n: `app/[lang]/layout.tsx`. With CMS (Payload): `app/(frontend)/layout.tsx` (+ `[lang]/`), and `app/(payload)/` copied from template, never edited (`references/cms.md`). "Root layout" in this skill and its references means this file.
 - **Don't scaffold unused things.** "Only when" items exist only when needed. Landing without DB → no `lib/db/`, no `drizzle.config.ts`, no Drizzle packages.
 - File names **kebab-case** (`hero-section.tsx`). Components PascalCase.
 - Route groups `(name)` only for shared layout / separation. Not by habit.
@@ -200,12 +170,14 @@ Rules:
 
 ### Loading and error files
 
-Root `app/` always has:
+Next to the root layout (section 4) always:
 
 - `loading.tsx`: general skeleton from tokens. Not a lone spinner.
 - `error.tsx`: `"use client"`. Short message, retry button, logs error. Never shows raw error.
-- `global-error.tsx`: `"use client"`, own `<html>` and `<body>`.
-- `not-found.tsx`: 404 + link home.
+- `global-error.tsx`: `"use client"`, own `<html>` and `<body>`. Always directly in `app/`.
+- `not-found.tsx`: 404 + link home. Root layout not in `app/` (i18n, CMS): `not-found.tsx` next to it, not `app/not-found.tsx` (that needs `app/layout.tsx`); global 404 for several root layouts = `app/global-not-found.tsx` (check docs).
+
+`favicon.ico`, `sitemap.ts`, `robots.ts` always directly in `app/` (Next.js serves them only from there).
 
 Route / group gets **own** `loading.tsx` / `error.tsx` only if needed: async / dynamic parts with a different skeleton, or a different error message. Errors bubble to nearest boundary; root covers the rest.
 
@@ -216,7 +188,7 @@ Route / group gets **own** `loading.tsx` / `error.tsx` only if needed: async / d
 
 ### Images
 
-No image path in components. Every image in `constants/images.ts`; components use it by key.
+No image path in components. Every image in `constants/images.ts`; components use it by key. (CMS-managed images come from Payload media instead: `references/cms.md`.)
 
 Files in `assets/images/<section>/`, **not** `public/`. Static import from `public/` is served twice (`/images/...` and `/_next/static/...`). `public/` only for fixed-URL files.
 
@@ -249,7 +221,7 @@ Only when needed:
 - `UPPER_SNAKE_CASE`, one per line, no quotes unless spaces. Group with `#` comments.
 - `NEXT_PUBLIC_` only for values the browser needs. Never secrets.
 - Validate with Zod. Server vars in `lib/env.ts` (`server-only`), public in `lib/env-public.ts`. No `process.env` elsewhere in app code.
-- Exception: CLI-run config files (`drizzle.config.ts`, `next.config.ts`) read `process.env` directly. Never import `lib/env.ts` there (`server-only` throws outside Next.js).
+- Exception: CLI-run files (`drizzle.config.ts`, `next.config.ts`, `payload.config.ts`, `cms/**`) read `process.env` directly. Never import `lib/env.ts` there (`server-only` throws outside Next.js).
 
 ```bash
 # .env.example
@@ -266,12 +238,12 @@ NEXT_PUBLIC_ANALYTICS_ID=
 - `"use client"` only on small leaf components needing state, effects, browser APIs. Not on pages / sections if avoidable.
 - **Always wrap dynamic / async parts in `<Suspense>`** with a layout-matching skeleton.
 - Cache Components:
-  - Reads in `lib/queries/` with `"use cache"`.
-  - Every cached function sets `cacheLife(...)` and `cacheTag(...)`.
-  - After a write, revalidate matching tag.
-  - Runtime data (`cookies()`, `headers()`, `searchParams`) outside cached scope, inside `<Suspense>`.
-- `import "server-only";` atop `lib/db/index.ts`, `lib/queries/*`, `lib/env.ts`, `lib/stripe.ts`, any other secret file.
-- **Never** in files CLI tools load in plain Node (it throws there): `lib/db/schema.ts` (drizzle-kit), `drizzle.config.ts`, `lib/auth.ts` (Better Auth CLI, see `references/auth.md`).
+  - Reads in query files (location per structure reference) with `"use cache"`.
+  - Every cached function sets `cacheLife(...)` and `cacheTag(...)`. Shop / app: tags only from `lib/cache-tags.ts`.
+  - After a write: `updateTag` in Server Actions, `revalidateTag(tag, "max")` in route handlers / webhooks (check docs).
+  - Runtime data (`cookies()`, `headers()`, `searchParams`, `params`, session) outside cached scope, inside `<Suspense>`.
+- `import "server-only";` atop `lib/db/index.ts`, every query file, `lib/env.ts`, `lib/stripe.ts`, session and action helpers (shop / app), any other secret file.
+- **Never** in files CLI tools load in plain Node (it throws there): `lib/db/schema.ts` (drizzle-kit), `drizzle.config.ts`, `lib/auth.ts` (Better Auth CLI, see `references/auth.md`), `payload.config.ts` and `cms/**` (Payload CLI).
 - Route handlers (`app/api/.../route.ts`) **only** for webhooks, third-party callbacks, public API. Reads = Server Components, writes = Server Actions.
 
 ## 6. Styling and tokens (`app/globals.css`)
@@ -321,11 +293,23 @@ Not by default. When needed: `references/dark-mode.md`.
 
 - `components/ui/` = small, generic, token-only primitives. No business text.
 - `components/sections/` = built from `ui/`. Content from props or `constants/`.
-- Pages only arrange sections. No styling in `page.tsx` beyond layout.
+- Shop / app: domain UI in `features/<domain>/components/`, built from `ui/`.
+- Pages only arrange sections / feature components. No styling in `page.tsx` beyond layout.
 - Every component takes `className`, merges with `cn()`.
-- Fonts: `next/font` in `app/layout.tsx`, exposed as CSS vars (`--font-body`, `--font-heading`).
+- Fonts: `next/font` in root layout, exposed as CSS vars (`--font-body`, `--font-heading`).
   - On Google Fonts → `next/font/google`, always (self-hosts, no request to Google). Only weights / styles the design uses.
   - Not on Google Fonts → `next/font/local`, woff2 in `assets/fonts/`. No file / license info → ask. Never swap fonts silently.
+
+`lib/utils.ts`:
+
+```ts
+import { clsx, type ClassValue } from "clsx";
+import { twMerge } from "tailwind-merge";
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
+```
 
 ### Icons
 
@@ -342,17 +326,6 @@ Rules:
 - One set per project. Custom design icons (logo, brand shapes) = SVG components in `components/icons/`.
 - Size / color via classes (`size-5`, `text-muted`), never hardcoded in SVG. `currentColor` for fill / stroke.
 - Decorative: `aria-hidden="true"`; icon-only buttons: `aria-label`.
-
-`lib/utils.ts`:
-
-```ts
-import { clsx, type ClassValue } from "clsx";
-import { twMerge } from "tailwind-merge";
-
-export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
-```
 
 ### Variants with cva
 
@@ -405,20 +378,20 @@ export function Button({ className, variant, size, ...props }: ButtonProps) {
 
 ## 8. Forms and data
 
-- Zod schemas in `lib/validations/`, shared client + server.
+- Zod schemas shared client + server (landing: `lib/validations/`; shop / app: `features/<domain>/schemas.ts`).
 - Client: react-hook-form + `zodResolver`. Server Action validates again with Zod.
-- **Landing:** keep server simple. One Server Action per form (contact, newsletter), returns `{ ok, error }`.
+- **Landing:** keep server simple. One Server Action per form (contact, newsletter) in `lib/actions/`, returns `{ ok, error }`. Details: `references/structure-landing.md`.
+- **Shop / app:** actions in `features/<domain>/actions.ts`, always through `authAction` / `publicAction` helper (session + Zod + safe errors), `updateTag` after writes. Details: `references/structure-app.md`.
 - **Email:** form must send mail (contact, newsletter, auth) → **ask which service before building**. Propose: Resend (simple API, React Email), Postmark, Brevo (also newsletters), Mailchimp (newsletter only), user's SMTP. Keys only via `lib/env.ts`. Send in Server Action, never client.
 - **Spam:** every public form gets honeypot + simple rate limit in action. Captcha (e.g. Cloudflare Turnstile) only if user asks or spam is known.
 - **Personal data:** EU-facing → `references/legal-eu.md` (privacy notice, opt-in).
-- **App / webshop:** actions in `lib/actions/`, typed results, revalidate tags after writes.
-- DB only when needed. Then Drizzle only, never from client components.
+- DB only when needed (`references/database.md`: which DB, local Docker or user's connection data). Then Drizzle only, never from client components.
 
 ## 9. SEO basics
 
 Full SEO (descriptions, OG, JSON-LD, sitemap, robots) = **public pages** (landing, webshop products / categories, blog) → `references/seo.md`. Apps / dashboards get only these basics (every project gets them):
 
-- Root `app/layout.tsx`: title template `"%s | <Site>"` + default title. Every `page.tsx` sets own `title`.
+- Root layout: title template `"%s | <Site>"` + default title. Every `page.tsx` sets own `title`.
 - Correct `<html lang="...">`.
 - One `h1` per page. Headings in order (`h2` → `h3`); tag by structure, look by class.
 - Internal links via `next/link`.
@@ -427,11 +400,11 @@ Full SEO (descriptions, OG, JSON-LD, sitemap, robots) = **public pages** (landin
 
 ## 10. Design → Next.js workflow
 
-1. **Read design.** Per `references/design-input.md` (artifact, export, Figma, screenshot). List colors, type sizes, radii, shadows, spacing, fonts, sections. Ask open questions now: icon set, wide screens, email service, EU / legal, optional features.
+1. **Read design.** Per `references/design-input.md` (artifact, export, Figma, screenshot). List colors, type sizes, radii, shadows, spacing, fonts, sections. Decide project type, read its structure reference. Ask open questions now: type (if unclear), icon set, wide screens, email service, EU / legal, optional features.
 2. **Tokens.** Read `references/tokens.md`. Into `:root`, map in `@theme`.
 3. **UI components.** `components/ui/` primitives, tokens only.
-4. **Sections.** Each design block → `components/sections/<name>-section.tsx`.
-5. **Pages.** Compose sections in `app/.../page.tsx`, add title. Public pages: full SEO per `references/seo.md`.
+4. **Sections / features.** Each marketing block → `components/sections/<name>-section.tsx`. Shop / app screens → `features/<domain>/` (schemas, queries, actions, components).
+5. **Pages.** Compose sections / feature components in `app/.../page.tsx`, add title. Public pages: full SEO per `references/seo.md`.
 6. **Responsive.** Mobile first, then `tablet:`, then `desktop:`.
    - **`check` mode checkpoint:** first pass does steps 2–6 only for setup, tokens, fonts, hero (+ header if shown with it). Run step 7 for that slice, then stop: show screenshots, list built / assumed / open, ask to continue. Remaining sections only after yes.
 7. **Check.** Run app, open with available browser tool (Claude in Chrome, or Playwright if set up), screenshot three sizes (+ wide if asked), compare with design.
@@ -441,7 +414,7 @@ Full SEO (descriptions, OG, JSON-LD, sitemap, robots) = **public pages** (landin
    - gaps filled with own proposals (states, sizes, copy, estimated values)
    - open GDPR / legal items (if EU)
    - failed or skipped checklist items
-   - **Deploy suggestion** (comment only, nothing set up), by what was built. E.g. Vercel: full Next.js features, least setup (Cache Components, Server Actions, ISR, images). Cloudflare (Workers via OpenNext): fast, cheap landing, or user already on Cloudflare. Heroku, Railway, Fly.io, VPS: long-running Node server, or app + DB together. Note pre-deploy checks: env vars, production URL, Stripe / Better Auth production keys and webhook URLs.
+   - **Deploy suggestion** (comment only, nothing set up), by what was built. E.g. Vercel: full Next.js features, least setup (Cache Components, Server Actions, ISR, images). Cloudflare (Workers via OpenNext): fast, cheap landing, or user already on Cloudflare. Heroku, Railway, Fly.io, VPS: long-running Node server, or app + DB together. Note pre-deploy checks: env vars, production DB + migrations, production URL, Stripe / Better Auth production keys and webhook URLs.
 
 ## 11. Final checklist
 
@@ -465,9 +438,10 @@ No "done" until every item is checked. Report failed / skipped items.
 
 **Structure**
 
+- [ ] Project type decided; its structure reference checklist passes
 - [ ] No `src/`. `app/` only routing files
 - [ ] Kebab-case files, `@/` imports
-- [ ] Root has `loading.tsx`, `error.tsx`, `global-error.tsx`, `not-found.tsx`, `favicon.ico`
+- [ ] Next to root layout: `loading.tsx`, `error.tsx`, `not-found.tsx`. Directly in `app/`: `global-error.tsx`, `favicon.ico`
 - [ ] Route-level `loading.tsx` / `error.tsx` only where needed
 - [ ] Nothing unused scaffolded (DB, actions, queries, env)
 - [ ] Multi-look components use `cva` with `defaultVariants`
@@ -490,8 +464,8 @@ No "done" until every item is checked. Report failed / skipped items.
 
 - [ ] `"use client"` only on leaves
 - [ ] Async parts in `<Suspense>` with matching fallback
-- [ ] Cached reads: `"use cache"`, `cacheLife`, `cacheTag`. Writes revalidate tags
-- [ ] `server-only` on DB client, queries, server env, secret files. Not on `lib/db/schema.ts` / `lib/auth.ts`
+- [ ] Cached reads: `"use cache"`, `cacheLife`, `cacheTag`. Writes: `updateTag` in actions, `revalidateTag` in route handlers
+- [ ] `server-only` on DB client, query files, server env, session, secret files. Not on `lib/db/schema.ts` / `lib/auth.ts` / `payload.config.ts` / `cms/**`
 - [ ] Forms: react-hook-form + Zod on client, Zod again in action
 - [ ] DB (if any) only via Drizzle, never from client components
 - [ ] Route handlers only for webhooks / external API

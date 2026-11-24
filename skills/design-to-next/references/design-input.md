@@ -35,7 +35,7 @@ Main input. Export = **source of values and copy**, not of code structure.
 
 **Structure**
 
-- No 1:1 HTML port. Split into `components/sections/` and `components/ui/` per SKILL.md.
+- No 1:1 HTML port. Split into `components/ui/` + `components/sections/` (shop / app screens: `features/<domain>/components/`) per structure reference.
 - Repeated blocks (cards, list items, FAQ rows) → one component + data in `constants/`.
 - Export JS (menus, sliders, tabs, accordions, scroll effects) → rebuild: native HTML first (`<details>`, `<dialog>`, popover), then CSS, small client component last. Never copy export script.
 - Inline `style` → tokens and classes.

@@ -4,13 +4,13 @@
     "name": "Antonio Blašković"
   },
   "metadata": {
-    "description": "Design 2 Next: turn designs into structured, production-minded Next.js projects."
+    "description": "design2next: turn any design artifact into an opinionated Next.js project."
   },
   "plugins": [
     {
       "name": "design-to-next",
       "source": "./",
-      "description": "Turn designs into structured, production-minded Next.js projects.",
+      "description": "Turn any design artifact (HTML/CSS, Figma, screenshots) into an opinionated Next.js project.",
       "version": "1.0.0"
     }
   ]

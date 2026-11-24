@@ -38,7 +38,11 @@ ok()   { echo "${GRN}ok   ${RST} $1"; }
 
 # Source dirs that exist
 DIRS=()
-for d in app components lib constants types; do [[ -d "$d" ]] && DIRS+=("$d"); done
+for d in app components features cms lib constants types; do [[ -d "$d" ]] && DIRS+=("$d"); done
+if (( ${#DIRS[@]} == 0 )); then
+  echo "${RED}ERROR${RST} no source folders yet (app/, components/, lib/...). Nothing to check."
+  exit 1
+fi
 
 # grep over TS/TSX source. Usage: src_grep <regex> [dirs...]
 src_grep() {
@@ -46,8 +50,11 @@ src_grep() {
   local targets=("$@")
   [[ ${#targets[@]} -eq 0 ]] && targets=("${DIRS[@]}")
   [[ ${#targets[@]} -eq 0 ]] && return 0
-  grep -rnE --include='*.ts' --include='*.tsx' "$re" "${targets[@]}" 2>/dev/null
+  grep -rnE --include='*.ts' --include='*.tsx' --exclude-dir='(payload)' "$re" "${targets[@]}" 2>/dev/null
 }
+
+# Payload CMS: app/(payload)/ is copied from Payload's template and never edited -> skipped by checks
+HAS_PAYLOAD=""; [[ -f payload.config.ts ]] && HAS_PAYLOAD=1
 
 # Check helper: run grep, report if anything matched
 check() {
@@ -63,23 +70,44 @@ echo "== Structure"
 
 [[ -d src ]] && err "src/ folder exists (skill: no src/)" || ok "no src/"
 
-for f in app/loading.tsx app/error.tsx app/global-error.tsx app/not-found.tsx app/favicon.ico; do
-  # With i18n the root layout lives in app/[lang]/
-  alt="${f/app\//app/[lang]/}"
-  if [[ -e "$f" || ( "$f" != app/global-error.tsx && "$f" != app/favicon.ico && -e "$alt" ) ]]; then
-    ok "$f"
-  else
-    err "missing $f"
-  fi
+# Root layout(s) (SKILL.md section 4): app/layout.tsx with <html>; else every app/[lang]/, app/(group)/,
+# app/(group)/[lang]/ layout that renders <html> (i18n, Payload, several root layouts)
+ROOT_LAYOUTS=()
+if [[ -f app/layout.tsx ]] && grep -q "<html" app/layout.tsx; then
+  ROOT_LAYOUTS=(app/layout.tsx)
+else
+  for c in app/\[*\]/layout.tsx app/\(*\)/layout.tsx app/\(*\)/\[*\]/layout.tsx; do
+    [[ -f "$c" && "$c" != app/\(payload\)/* ]] || continue
+    grep -q "<html" "$c" && ROOT_LAYOUTS+=("$c")
+  done
+fi
+
+if (( ${#ROOT_LAYOUTS[@]} == 0 )); then
+  err "no root layout with <html> (app/layout.tsx, app/[lang]/, or app/(frontend)/ with CMS)"
+fi
+for rl in ${ROOT_LAYOUTS[@]+"${ROOT_LAYOUTS[@]}"}; do
+  rd="${rl%/layout.tsx}"
+  ok "root layout: $rl"
+  for name in loading.tsx error.tsx not-found.tsx; do
+    if [[ -e "$rd/$name" ]]; then ok "$rd/$name"
+    elif [[ "$name" == not-found.tsx && -e app/not-found.tsx && -f app/layout.tsx ]]; then ok "app/not-found.tsx"
+    elif [[ "$name" == not-found.tsx && -e app/global-not-found.tsx ]]; then ok "app/global-not-found.tsx"   # several root layouts
+    else err "missing $rd/$name (next to root layout)"; fi
+  done
+done
+# Next.js serves these only from the top of app/
+for f in app/global-error.tsx app/favicon.ico; do
+  [[ -e "$f" ]] && ok "$f" || err "missing $f"
 done
 
-bad_names=$(find "${DIRS[@]}" -type f \( -name '*.ts' -o -name '*.tsx' -o -name '*.css' \) 2>/dev/null \
+bad_names=""
+bad_names=$(find "${DIRS[@]}" -path 'app/(payload)' -prune -o -type f \( -name '*.ts' -o -name '*.tsx' -o -name '*.css' \) -print 2>/dev/null \
   | awk -F/ '{print $0" "$NF}' \
   | awk '$2 !~ /^[a-z0-9]+(-[a-z0-9]+)*(\.[a-z0-9]+)+$/ {print $1}')
 check err "file names not kebab-case" "$bad_names" "file names kebab-case"
 
 if [[ -d app ]]; then
-  non_route=$(find app -type f \( -name '*.ts' -o -name '*.tsx' \) 2>/dev/null \
+  non_route=$(find app -path 'app/(payload)' -prune -o -type f \( -name '*.ts' -o -name '*.tsx' \) -print 2>/dev/null \
     | grep -vE '/(page|layout|template|loading|error|global-error|not-found|forbidden|unauthorized|default|route|sitemap|robots|manifest|icon|apple-icon|opengraph-image|twitter-image)\.(ts|tsx)$' \
     | grep -vE '\.d\.ts$')
   check err "non-routing files inside app/ (move to components/ or lib/)" "$non_route" "app/ has only routing files"
@@ -88,64 +116,106 @@ fi
 echo
 echo "== Tokens and styling"
 
-COMP=(); [[ -d components ]] && COMP+=(components); [[ -d app ]] && COMP+=(app)
+# UI code: components/, app/, features/ (shop / app domain components)
+COMP=(); for d in components app features; do [[ -d "$d" ]] && COMP+=("$d"); done
+# grep only UI folders; none yet -> no output (never falls back to lib/, constants/...)
+comp_grep() { (( ${#COMP[@]} )) || return 0; src_grep "$1" "${COMP[@]}"; }
 
-out=$(src_grep '(bg|text|border|fill|stroke|ring|outline|decoration|from|via|to|shadow|accent|caret|divide|placeholder)-\[(#|rgb|hsl|oklch|color)' "${COMP[@]}")
+out=$(comp_grep '(bg|text|border|fill|stroke|ring|outline|decoration|from|via|to|shadow|accent|caret|divide|placeholder)-\[(#|rgb|hsl|oklch|color)')
 check err "arbitrary color values in components (add a token)" "$out" "no arbitrary colors"
 
-out=$(src_grep '#[0-9a-fA-F]{6}\b|#[0-9a-fA-F]{3}\b["'"'"' ;)]' "${COMP[@]}")
+out=$(comp_grep '#[0-9a-fA-F]{6}\b|#[0-9a-fA-F]{3}\b["'"'"' ;)]')
 check warn "hex values in TS/TSX (colors belong in globals.css)" "$out" "no hex in components"
 
-out=$(src_grep '(text|leading|tracking|font|rounded(-[trblse]{1,2})?|shadow|p[xytrblse]?|m[xytrblse]?|gap(-[xy])?|space-[xy])-\[[0-9.]+(px|rem|em)\]' "${COMP[@]}")
+out=$(comp_grep '(text|leading|tracking|font|rounded(-[trblse]{1,2})?|shadow|p[xytrblse]?|m[xytrblse]?|gap(-[xy])?|space-[xy])-\[[0-9.]+(px|rem|em)\]')
 check err "arbitrary typography / radius / spacing values (add a token)" "$out" "no arbitrary design values"
 
-out=$(src_grep '(^|[ "'"'"'`])(sm|md|lg|xl|2xl):[a-z]' "${COMP[@]}")
+out=$(comp_grep '(^|[ "'"'"'`])(sm|md|lg|xl|2xl):[a-z]')
 check err "default Tailwind breakpoints used (only tablet: / desktop:)" "$out" "only tablet: / desktop: breakpoints"
 
 out=$(src_grep "from ['\"]motion|from ['\"]framer-motion" )
 [[ -n "$out" ]] && warn "motion is used: make sure CSS could not do it" "$out" || ok "no motion"
 
-out=$(grep -rnE --include='*.ts' --include='*.tsx' --include='*.css' 'fonts\.(googleapis|gstatic)\.com' "${DIRS[@]}" 2>/dev/null)
+out=$(grep -rnE --exclude-dir='(payload)' --include='*.ts' --include='*.tsx' --include='*.css' 'fonts\.(googleapis|gstatic)\.com' "${DIRS[@]}" 2>/dev/null)
 check err "Google Fonts loaded from Google (use next/font/google)" "$out" "no direct Google Fonts requests"
 
 echo
 echo "== Server and client"
 
-out=$(grep -rlE --include='*.tsx' --include='*.ts' "^['\"]use client['\"]" app components/sections components/layout 2>/dev/null \
+out=$(grep -rlE --exclude-dir='(payload)' --include='*.tsx' --include='*.ts' "^['\"]use client['\"]" app components/sections components/layout 2>/dev/null \
   | grep -vE '(^|/)(error|global-error)\.tsx$')
 check warn "\"use client\" on a page, layout or section (keep it on leaf components)" "$out" "\"use client\" only on leaves"
 
+# Query files: lib/queries/** (landing) and features/*/queries.ts | features/*/queries/** (shop / app)
+query_files() {
+  [[ -d lib/queries ]] && find lib/queries -type f \( -name '*.ts' -o -name '*.tsx' \)
+  [[ -d features ]] && find features -type f | grep -E '^features/[^/]+/queries(\.ts|/.+\.tsx?)$'
+}
+
 server_files=()
-[[ -d lib/queries ]] && while IFS= read -r f; do server_files+=("$f"); done < <(find lib/queries -type f \( -name '*.ts' -o -name '*.tsx' \))
-for f in lib/db/index.ts lib/env.ts lib/stripe.ts; do [[ -f "$f" ]] && server_files+=("$f"); done
+while IFS= read -r f; do [[ -n "$f" ]] && server_files+=("$f"); done < <(query_files)
+for f in lib/db/index.ts lib/env.ts lib/stripe.ts lib/action-helpers.ts features/auth/session.ts; do [[ -f "$f" ]] && server_files+=("$f"); done
 missing=""
-for f in "${server_files[@]}"; do
+for f in ${server_files[@]+"${server_files[@]}"}; do
   grep -qE "^import ['\"]server-only['\"]" "$f" || missing+="$f"$'\n'
 done
 check err "missing import \"server-only\"" "${missing%$'\n'}" "server-only where needed"
 
 # Files loaded by CLI tools in plain Node must NOT import server-only (it throws there)
 cli_bad=""
-for f in lib/db/schema.ts lib/auth.ts drizzle.config.ts; do
+cli_files=(lib/db/schema.ts lib/auth.ts drizzle.config.ts)
+[[ -d lib/db/schema ]] && while IFS= read -r f; do cli_files+=("$f"); done < <(find lib/db/schema -type f -name '*.ts')
+for f in "${cli_files[@]}"; do
   [[ -f "$f" ]] && grep -qE "^import ['\"]server-only['\"]" "$f" && cli_bad+="$f"$'\n'
 done
 [[ -f drizzle.config.ts ]] && grep -qE "from ['\"]@/lib/env['\"]|from ['\"]\./lib/env['\"]" drizzle.config.ts && cli_bad+="drizzle.config.ts (imports lib/env.ts)"$'\n'
 check err "server-only in a file loaded by drizzle-kit / Better Auth CLI (breaks the CLI)" "${cli_bad%$'\n'}" "CLI-loaded files without server-only"
 
-if [[ -d lib/queries ]]; then
+if [[ -d lib/queries || -d features ]]; then
   nocache=""
   while IFS= read -r f; do
+    [[ -n "$f" ]] || continue
     grep -q "use cache" "$f" || continue
     grep -q "cacheLife" "$f" && grep -q "cacheTag" "$f" || nocache+="$f"$'\n'
-  done < <(find lib/queries -type f -name '*.ts')
+  done < <(query_files)
   check err "\"use cache\" without cacheLife / cacheTag" "${nocache%$'\n'}" "cached reads have cacheLife + cacheTag"
 fi
 
-out=$(grep -rlE --include='*.tsx' --include='*.ts' "^['\"]use client['\"]" "${DIRS[@]}" 2>/dev/null \
+if [[ ( -d features || -d lib/queries ) ]] && ! command -v perl >/dev/null; then
+  err "perl not found: can't check client components for server query imports (install perl)"
+elif [[ -d features || -d lib/queries ]]; then
+  # Client components may only `import type { ... }` from queries / session / action helpers.
+  # One import statement at a time: default/namespace part on one line, optional { ... } may span lines.
+  out=$(grep -rlE --exclude-dir='(payload)' --include='*.tsx' --include='*.ts' "^['\"]use client['\"]" "${DIRS[@]}" 2>/dev/null \
+    | xargs -r perl -0777 -ne 'my $p = q{(?:@/features/[^"\x27]+/queries|@/lib/queries|\.\.?/(?:[^"\x27]*/)?queries|@/features/auth/session|@/lib/action-helpers)}; while (m#^(?:import[ \t]+(?!type\b)(?:[\w\$]+[ \t]*,?\s*)?(?:\*[ \t]+as[ \t]+\w+[ \t]*)?(?:\{[^}]*\})?|export[ \t]+(?!type\b)(?:\*(?:[ \t]+as[ \t]+\w+)?|\{[^}]*\}))[ \t]*from[ \t]+["\x27]($p(?:/[^"\x27]*)?)["\x27]#mg) { print "$ARGV: import from $1\n" }')   # no 2>/dev/null: a perl error must show
+  check err "client component imports server query / session code (only \"import type { ... }\" allowed; inline { type X } stays in the bundle with verbatimModuleSyntax)" "$out" "no server queries in client components"
+fi
+
+if [[ -d features ]]; then
+  out=$(find features -type f 2>/dev/null | grep -E '^features/[^/]+/(queries|actions)(\.ts|/.+\.tsx?)$' \
+    | xargs -r grep -lE "^['\"]use client['\"]" 2>/dev/null)
+  check err "\"use client\" in a feature queries / actions file" "$out" "feature queries / actions are server code"
+
+  mixed=""
+  for d in lib/queries lib/actions lib/validations; do [[ -d "$d" ]] && mixed+="$d"$'\n'; done
+  check warn "mixed structure: features/ next to lib/queries|actions|validations (shop / app: domain code in features/<domain>/)" "${mixed%$'\n'}" "no mixed lib/queries|actions|validations next to features/"
+fi
+
+# updateTag only works in Server Actions
+out=$(find app -path 'app/(payload)' -prune -o -type f -name 'route.*' -print 2>/dev/null | xargs -r grep -nHE "\bupdateTag\(" 2>/dev/null)
+check err "updateTag in a route handler (use revalidateTag(tag, \"max\"))" "$out" "no updateTag in route handlers"
+
+# Central tag registry: no string literal tags once lib/cache-tags.ts exists
+if [[ -f lib/cache-tags.ts ]]; then
+  out=$(src_grep "\b(cacheTag|updateTag|revalidateTag)\([[:space:]]*['\"\`]" | grep -v '^lib/cache-tags.ts:')
+  check warn "string literal cache tag (use cacheTags from lib/cache-tags.ts)" "$out" "cache tags from lib/cache-tags.ts"
+fi
+
+out=$(grep -rlE --exclude-dir='(payload)' --include='*.tsx' --include='*.ts' "^['\"]use client['\"]" "${DIRS[@]}" 2>/dev/null \
   | xargs -r grep -lE "from ['\"](@/lib/db|drizzle-orm)" 2>/dev/null)
 check err "DB imported in a client component" "$out" "no DB in client components"
 
-out=$(grep -rlE --include='*.tsx' --include='*.ts' "^['\"]use client['\"]" "${DIRS[@]}" 2>/dev/null \
+out=$(grep -rlE --exclude-dir='(payload)' --include='*.tsx' --include='*.ts' "^['\"]use client['\"]" "${DIRS[@]}" 2>/dev/null \
   | xargs -r grep -lE "from ['\"](@/lib/auth['\"]|@/lib/stripe|stripe['\"])" 2>/dev/null)
 check err "server auth / Stripe imported in a client component (use lib/auth-client.ts)" "$out" "no server auth / Stripe in client components"
 
@@ -155,13 +225,44 @@ while IFS= read -r f; do
   grep -qE "request\.json\(\)|req\.json\(\)" "$f" && err "Stripe webhook reads JSON body (needs raw text for the signature)" "$f"
 done < <(find app -path '*webhooks*stripe*' -name 'route.ts' 2>/dev/null)
 
+if [[ -n "$HAS_PAYLOAD" ]]; then
+  echo
+  echo "== Payload CMS"
+
+  # payload.config.ts and cms/** are loaded by the Payload CLI in plain Node
+  bad=""
+  grep -qE "^import ['\"]server-only['\"]" payload.config.ts && bad+="payload.config.ts"$'\n'
+  [[ -d cms ]] && bad+=$(grep -rlE "^import ['\"]server-only['\"]" cms 2>/dev/null)
+  [[ -d cms ]] && bad+=$'\n'$(grep -rlE "from ['\"](@/lib/env|(\.\./)+lib/env)(-public)?['\"]" cms 2>/dev/null | sed 's/$/ (imports lib\/env*, which is server-only)/')
+  grep -qE "from ['\"](@/lib/env|\./lib/env)['\"]" payload.config.ts && bad+=$'\n'"payload.config.ts (imports lib/env.ts)"
+  bad=$(echo "$bad" | sed '/^$/d')
+  check err "server-only in a file loaded by the Payload CLI (payload.config.ts, cms/)" "$bad" "Payload CLI files without server-only"
+
+  out=$([[ -d cms ]] && grep -rnE "\bupdateTag\(" cms 2>/dev/null)
+  check err "updateTag in a Payload hook (hooks are not Server Actions: revalidateTag(tag, \"max\"))" "$out" "Payload hooks use revalidateTag"
+
+  [[ -d "app/(payload)" ]] && ok "app/(payload)/ present" || err "payload.config.ts but no app/(payload)/ (copy it from Payload's blank template)"
+  [[ -f app/layout.tsx ]] && err "app/layout.tsx next to Payload (move own root layout into app/(frontend)/)" || ok "own root layout in a route group"
+
+  # Our Drizzle tables kept apart from Payload's (references/database.md section 5)
+  if [[ -f drizzle.config.ts ]] && ! grep -q "db-mongodb" payload.config.ts; then   # Mongo: our tables in a separate SQL DB
+    if grep -qE "dialect:[[:space:]]*['\"]postgresql" drizzle.config.ts; then
+      grep -q "schemaFilter" drizzle.config.ts && ok "drizzle.config.ts has schemaFilter" \
+        || warn "Postgres + Payload: drizzle.config.ts without schemaFilter (own tables in pgSchema(\"app\"), schemaFilter: [\"app\"])"
+    elif grep -qE "dialect:[[:space:]]*['\"](sqlite|turso)" drizzle.config.ts; then
+      grep -q "tablesFilter" drizzle.config.ts && ok "drizzle.config.ts has tablesFilter" \
+        || warn "SQLite + Payload: drizzle.config.ts without tablesFilter (own tables prefixed app_, tablesFilter: [\"app_*\"])"
+    fi
+  fi
+fi
+
 echo
 echo "== Constants, images, env"
 
-out=$(src_grep '<img[ >]' "${COMP[@]}")
+out=$(comp_grep '<img[ >]')
 check err "<img> used (use next/image)" "$out" "no <img>"
 
-out=$(src_grep '["'"'"'`][^"'"'"'`]*\.(png|jpe?g|webp|avif|gif|svg)["'"'"'`]' components app | grep -v 'opengraph-image\|apple-icon\|icon\.')
+out=$(comp_grep '["'"'"'`][^"'"'"'`]*\.(png|jpe?g|webp|avif|gif|svg)["'"'"'`]' | grep -v 'opengraph-image\|apple-icon\|icon\.')
 check err "image path in a component or page (put it in constants/images.ts or constants/site.ts, also for JSON-LD logos)" "$out" "no image paths in components"
 
 if [[ -d assets/images ]]; then
@@ -172,15 +273,33 @@ fi
 out=$(src_grep 'from ["'"'"']@/public/' )
 check err "image imported from public/ (use assets/images/)" "$out" "no imports from public/"
 
-out=$(src_grep '(href|src)=["'"'"'](https?:|mailto:|tel:)' components app)
+out=$(comp_grep '(href|src)=["'"'"'](https?:|mailto:|tel:)')
 check warn "hardcoded external link in a component (put it in constants/)" "$out" "no hardcoded external links"
 
-out=$(src_grep 'process\.env' | grep -vE '^lib/env(-public)?\.ts:')
-check err "process.env outside lib/env.ts / lib/env-public.ts" "$out" "env read only through lib/env*"
+out=$(src_grep 'process\.env' | grep -vE '^(lib/env(-public)?\.ts|cms/[^:]+):')   # cms/** is Payload CLI-loaded (no server-only)
+check err "process.env outside lib/env.ts / lib/env-public.ts (and cms/)" "$out" "env read only through lib/env*"
 
 if [[ -f lib/env.ts || -f lib/env-public.ts ]]; then
   [[ -f .env.example ]] && ok ".env.example exists" || err "env is used but .env.example is missing"
 fi
+# Database (references/database.md)
+if [[ -d lib/db || -f drizzle.config.ts || -f payload.config.ts ]]; then
+  if [[ -f .env.example ]]; then
+    grep -qE '^(DATABASE_URL|DATABASE_URI)=' .env.example && ok "DATABASE_URL in .env.example" \
+      || err "database used but DATABASE_URL missing in .env.example"
+  elif [[ ! -f lib/env.ts && ! -f lib/env-public.ts ]]; then   # else reported once by the env block
+    err "database used but .env.example is missing (DATABASE_URL=)"
+  fi
+  compose=$(ls compose.yaml compose.yml docker-compose.yml docker-compose.yaml 2>/dev/null | head -1)
+  if [[ -n "$compose" ]]; then
+    grep -q "healthcheck" "$compose" && ok "$compose has a healthcheck" || warn "$compose without healthcheck (wait for DB before migrating)"
+    grep -qE '^volumes:' "$compose" && ok "$compose keeps data in a volume" || warn "$compose without named volume (data lost on recreate)"
+  fi
+  if [[ -f drizzle.config.ts ]] && grep -qE "dialect:[[:space:]]*['\"](sqlite|turso)" drizzle.config.ts && [[ -f .gitignore ]]; then
+    grep -qE '(^|/)(data(/.*)?|[^ ]*\.db|[^ ]*\.sqlite3?)$' .gitignore && ok "SQLite files gitignored" || warn "SQLite DB file not in .gitignore (add data/ or *.db)"
+  fi
+fi
+
 if [[ -f .gitignore ]] && ! grep -qE '^\.env(\*|\.\*|\*\.local|.*local)' .gitignore; then
   err ".gitignore does not cover .env*.local"
 fi
@@ -195,20 +314,19 @@ if [[ -d app ]]; then
   nometa=""
   while IFS= read -r f; do
     grep -qE 'export (const (metadata|generateMetadata)\b|(async )?function generateMetadata)' "$f" || nometa+="$f"$'\n'
-  done < <(find app -type f -name 'page.tsx')
+  done < <(find app -path 'app/(payload)' -prune -o -type f -name 'page.tsx' -print)
   check err "page without metadata / generateMetadata" "${nometa%$'\n'}" "every page exports metadata"
 
   multi_h1=""
   while IFS= read -r f; do
     n=$(grep -oE '<h1[ >]' "$f" | wc -l)
     (( n > 1 )) && multi_h1+="$f ($n)"$'\n'
-  done < <(find app components -type f -name '*.tsx' 2>/dev/null)
+  done < <(find app components -path 'app/(payload)' -prune -o -type f -name '*.tsx' -print 2>/dev/null)
   check warn "more than one <h1> in a file" "${multi_h1%$'\n'}" "no file with several <h1>"
 
-  layout=$(ls app/layout.tsx app/\[*\]/layout.tsx 2>/dev/null | head -1)
-  if [[ -n "$layout" ]]; then
-    grep -qE '<html[^>]*lang=' "$layout" && ok "lang on <html>" || err "no lang on <html> in $layout"
-  fi
+  for rl in ${ROOT_LAYOUTS[@]+"${ROOT_LAYOUTS[@]}"}; do
+    grep -qE '<html[^>]*lang=' "$rl" && ok "lang on <html> ($rl)" || err "no lang on <html> in $rl"
+  done
 fi
 
 if [[ "$MODE" != "fast" ]]; then

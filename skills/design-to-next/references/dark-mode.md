@@ -38,7 +38,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 }
 ```
 
-`app/layout.tsx`: wrap `children`, add `suppressHydrationWarning` on `<html>` (next-themes sets attribute before hydration).
+Root layout (SKILL.md section 4): wrap `children`, add `suppressHydrationWarning` on `<html>` (next-themes sets attribute before hydration).
 
 ```tsx
 <html lang="en" suppressHydrationWarning>
