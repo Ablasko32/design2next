@@ -53,6 +53,14 @@ src_grep() {
   grep -rnE --include='*.ts' --include='*.tsx' --exclude-dir='(payload)' "$re" "${targets[@]}" 2>/dev/null
 }
 
+# Portable `xargs -r`: run "$@" with stdin lines as args, skip if none (BSD/macOS xargs has no -r; bash 3.2 has no mapfile)
+xargs_r() {
+  local args=() line
+  while IFS= read -r line; do [[ -n "$line" ]] && args+=("$line"); done
+  (( ${#args[@]} )) || return 0
+  "$@" "${args[@]}"
+}
+
 # Payload CMS: app/(payload)/ is copied from Payload's template and never edited -> skipped by checks
 HAS_PAYLOAD=""; [[ -f payload.config.ts ]] && HAS_PAYLOAD=1
 
@@ -130,7 +138,8 @@ check warn "hex values in TS/TSX (colors belong in globals.css)" "$out" "no hex 
 out=$(comp_grep '(text|leading|tracking|font|rounded(-[trblse]{1,2})?|shadow|p[xytrblse]?|m[xytrblse]?|gap(-[xy])?|space-[xy])-\[[0-9.]+(px|rem|em)\]')
 check err "arbitrary typography / radius / spacing values (add a token)" "$out" "no arbitrary design values"
 
-out=$(comp_grep '(^|[ "'"'"'`])(sm|md|lg|xl|2xl):[a-z]')
+# any utility after the prefix (also range variants max-md:, min-lg:): md:flex, md:-mt-4, lg:!hidden, md:[&>*]:..., md:@container; also dark:md:flex
+out=$(comp_grep '(^|[ :"'"'"'`])(max-|min-)?(sm|md|lg|xl|2xl):[][!@a-z-]')
 check err "default Tailwind breakpoints used (only tablet: / desktop:)" "$out" "only tablet: / desktop: breakpoints"
 
 out=$(src_grep "from ['\"]motion|from ['\"]framer-motion" )
@@ -145,6 +154,13 @@ echo "== Server and client"
 out=$(grep -rlE --exclude-dir='(payload)' --include='*.tsx' --include='*.ts' "^['\"]use client['\"]" app components/sections components/layout 2>/dev/null \
   | grep -vE '(^|/)(error|global-error)\.tsx$')
 check warn "\"use client\" on a page, layout or section (keep it on leaf components)" "$out" "\"use client\" only on leaves"
+
+# Server Actions live in actions.ts files ("use server" at top), never inline in components
+out=$(grep -rnE --exclude-dir='(payload)' --include='*.tsx' "['\"]use server['\"]" "${DIRS[@]}" 2>/dev/null)
+check warn "\"use server\" in a .tsx file (inline action: move it to an actions.ts file)" "$out" "no inline Server Actions in .tsx"
+
+out=$(src_grep 'dangerouslySetInnerHTML' | grep -v '^components/seo/json-ld\.tsx:')
+check warn "dangerouslySetInnerHTML outside components/seo/json-ld.tsx (XSS risk)" "$out" "dangerouslySetInnerHTML only in json-ld.tsx"
 
 # Query files: lib/queries/** (landing) and features/*/queries.ts | features/*/queries/** (shop / app)
 query_files() {
@@ -187,13 +203,13 @@ elif [[ -d features || -d lib/queries ]]; then
   # Client components may only `import type { ... }` from queries / session / action helpers.
   # One import statement at a time: default/namespace part on one line, optional { ... } may span lines.
   out=$(grep -rlE --exclude-dir='(payload)' --include='*.tsx' --include='*.ts' "^['\"]use client['\"]" "${DIRS[@]}" 2>/dev/null \
-    | xargs -r perl -0777 -ne 'my $p = q{(?:@/features/[^"\x27]+/queries|@/lib/queries|\.\.?/(?:[^"\x27]*/)?queries|@/features/auth/session|@/lib/action-helpers)}; while (m#^(?:import[ \t]+(?!type\b)(?:[\w\$]+[ \t]*,?\s*)?(?:\*[ \t]+as[ \t]+\w+[ \t]*)?(?:\{[^}]*\})?|export[ \t]+(?!type\b)(?:\*(?:[ \t]+as[ \t]+\w+)?|\{[^}]*\}))[ \t]*from[ \t]+["\x27]($p(?:/[^"\x27]*)?)["\x27]#mg) { print "$ARGV: import from $1\n" }')   # no 2>/dev/null: a perl error must show
+    | xargs_r perl -0777 -ne 'my $p = q{(?:@/features/[^"\x27]+/queries|@/lib/queries|\.\.?/(?:[^"\x27]*/)?queries|@/features/auth/session|@/lib/action-helpers)}; while (m#^(?:import[ \t]+(?!type\b)(?:[\w\$]+[ \t]*,?\s*)?(?:\*[ \t]+as[ \t]+\w+[ \t]*)?(?:\{[^}]*\})?|export[ \t]+(?!type\b)(?:\*(?:[ \t]+as[ \t]+\w+)?|\{[^}]*\}))[ \t]*from[ \t]+["\x27]($p(?:/[^"\x27]*)?)["\x27]#mg) { print "$ARGV: import from $1\n" }')   # no 2>/dev/null: a perl error must show
   check err "client component imports server query / session code (only \"import type { ... }\" allowed; inline { type X } stays in the bundle with verbatimModuleSyntax)" "$out" "no server queries in client components"
 fi
 
 if [[ -d features ]]; then
   out=$(find features -type f 2>/dev/null | grep -E '^features/[^/]+/(queries|actions)(\.ts|/.+\.tsx?)$' \
-    | xargs -r grep -lE "^['\"]use client['\"]" 2>/dev/null)
+    | xargs_r grep -lE "^['\"]use client['\"]" 2>/dev/null)
   check err "\"use client\" in a feature queries / actions file" "$out" "feature queries / actions are server code"
 
   mixed=""
@@ -202,7 +218,7 @@ if [[ -d features ]]; then
 fi
 
 # updateTag only works in Server Actions
-out=$(find app -path 'app/(payload)' -prune -o -type f -name 'route.*' -print 2>/dev/null | xargs -r grep -nHE "\bupdateTag\(" 2>/dev/null)
+out=$(find app -path 'app/(payload)' -prune -o -type f -name 'route.*' -print 2>/dev/null | xargs_r grep -nHE "\bupdateTag\(" 2>/dev/null)
 check err "updateTag in a route handler (use revalidateTag(tag, \"max\"))" "$out" "no updateTag in route handlers"
 
 # Central tag registry: no string literal tags once lib/cache-tags.ts exists
@@ -212,11 +228,11 @@ if [[ -f lib/cache-tags.ts ]]; then
 fi
 
 out=$(grep -rlE --exclude-dir='(payload)' --include='*.tsx' --include='*.ts' "^['\"]use client['\"]" "${DIRS[@]}" 2>/dev/null \
-  | xargs -r grep -lE "from ['\"](@/lib/db|drizzle-orm)" 2>/dev/null)
+  | xargs_r grep -lE "from ['\"](@/lib/db|drizzle-orm)" 2>/dev/null)
 check err "DB imported in a client component" "$out" "no DB in client components"
 
 out=$(grep -rlE --exclude-dir='(payload)' --include='*.tsx' --include='*.ts' "^['\"]use client['\"]" "${DIRS[@]}" 2>/dev/null \
-  | xargs -r grep -lE "from ['\"](@/lib/auth['\"]|@/lib/stripe|stripe['\"])" 2>/dev/null)
+  | xargs_r grep -lE "from ['\"](@/lib/auth['\"]|@/lib/stripe|stripe['\"])" 2>/dev/null)
 check err "server auth / Stripe imported in a client component (use lib/auth-client.ts)" "$out" "no server auth / Stripe in client components"
 
 while IFS= read -r f; do
@@ -262,6 +278,15 @@ echo "== Constants, images, env"
 out=$(comp_grep '<img[ >]')
 check err "<img> used (use next/image)" "$out" "no <img>"
 
+# Multi-line: Prettier puts each prop on its own line. (?:=>|[^>]) lets arrow functions in props through.
+if (( ${#COMP[@]} )) && command -v perl >/dev/null; then
+  out=$(find "${COMP[@]}" -path 'app/(payload)' -prune -o -type f -name '*.tsx' -print 2>/dev/null \
+    | xargs_r perl -0777 -ne 'while (m#<Image\b(?:=>|[^>])*?\spriority\b#sg) { my $l = 1 + (substr($_, 0, $+[0]) =~ tr/\n//); print "$ARGV:$l\n" }')
+else
+  out=""
+fi
+check err "<Image priority> (deprecated since Next.js 16: preload, or loading=\"eager\" + fetchPriority=\"high\")" "$out" "no deprecated Image priority"
+
 out=$(comp_grep '["'"'"'`][^"'"'"'`]*\.(png|jpe?g|webp|avif|gif|svg)["'"'"'`]' | grep -v 'opengraph-image\|apple-icon\|icon\.')
 check err "image path in a component or page (put it in constants/images.ts or constants/site.ts, also for JSON-LD logos)" "$out" "no image paths in components"
 
@@ -305,6 +330,26 @@ if [[ -f .gitignore ]] && ! grep -qE '^\.env(\*|\.\*|\*\.local|.*local)' .gitign
 fi
 if [[ -f .env.example ]] && grep -qE '^NEXT_PUBLIC_[A-Z_]*(SECRET|TOKEN|PASSWORD|PRIVATE)' .env.example; then
   err "secret-looking NEXT_PUBLIC_ var in .env.example" "$(grep -nE '^NEXT_PUBLIC_[A-Z_]*(SECRET|TOKEN|PASSWORD|PRIVATE)' .env.example)"
+fi
+
+NEXT_CONFIG=$(ls next.config.ts next.config.mts next.config.mjs next.config.js next.config.cjs 2>/dev/null | head -1)
+[[ -z "$NEXT_CONFIG" ]] && warn "no next.config.* found (image host / security header checks skipped)"
+if [[ -n "$NEXT_CONFIG" ]]; then
+  # any * in a host: "**", "*.cdn.com", "**.amazonaws.com", also new URL("https://**.x.com/...")
+  out=$(grep -nE "hostname:[[:space:]]*['\"][^'\"]*\*|new URL\([[:space:]]*['\"\`][a-z]+://[^/'\"\`]*\*" "$NEXT_CONFIG")
+  check err "wildcard image host in $NEXT_CONFIG remotePatterns (list exact hostnames)" "$out" "remotePatterns without wildcard host"
+  if grep -qE "dangerouslyAllowSVG:[[:space:]]*true" "$NEXT_CONFIG"; then
+    grep -q "contentSecurityPolicy" "$NEXT_CONFIG" && ok "dangerouslyAllowSVG with contentSecurityPolicy" \
+      || err "dangerouslyAllowSVG: true without images.contentSecurityPolicy in $NEXT_CONFIG"
+  fi
+  # header values may live in an imported constant (lib/, constants/)
+  hdr_src=("$NEXT_CONFIG"); for d in lib constants; do [[ -d "$d" ]] && hdr_src+=("$d"); done
+  missing_h=""
+  grep -qE "headers[[:space:]]*(\(|:)" "$NEXT_CONFIG" || missing_h+="headers() in $NEXT_CONFIG"$'\n'
+  for h in "X-Content-Type-Options" "Referrer-Policy" "X-Frame-Options|frame-ancestors" "Permissions-Policy" "Strict-Transport-Security"; do
+    grep -rqE --include='*.ts' --include='*.mts' --include='*.mjs' --include='*.js' --include='*.cjs' "$h" "${hdr_src[@]}" 2>/dev/null || missing_h+="$h"$'\n'
+  done
+  check warn "security headers missing (SKILL.md section 3)" "${missing_h%$'\n'}" "security headers set"
 fi
 
 echo

@@ -42,7 +42,7 @@ components/ui/rich-text.tsx   Lexical renderer (section 6)
 
 Setup (check docs for current commands):
 
-- Install `payload @payloadcms/next @payloadcms/db-postgres @payloadcms/richtext-lexical sharp` (+ `@payloadcms/plugin-seo`, storage adapter when needed). Pin exact versions; all `@payloadcms/*` same version.
+- Install `payload @payloadcms/next @payloadcms/db-postgres @payloadcms/richtext-lexical sharp` and dev dependency `cross-env` (used by the `payload` script) (+ `@payloadcms/plugin-seo`, storage adapter when needed). Pin exact versions; all `@payloadcms/*` same version.
 - Copy `app/(payload)/` from Payload's blank template. Move our root layout into `app/(frontend)/`. **No `app/layout.tsx`** (two root layouts).
 - `next.config.ts`: `export default withPayload(nextConfig)`; keep `cacheComponents: true`. Payload is ESM-only.
 - `tsconfig.json` paths: `"@payload-config": ["./payload.config.ts"]`.
@@ -149,6 +149,7 @@ Only if user wants them (section 1):
 
 - Collection: `versions: { drafts: true }`, `admin.livePreview` / `preview` URL to a route that enables `draftMode()`.
 - `draftMode()` = runtime data: draft read path **outside** `"use cache"`, inside `<Suspense>`, `draft: true` + `overrideAccess: false` + editor user. Published path stays cached.
+- Frame header: `X-Frame-Options: SAMEORIGIN` / `frame-ancestors 'self'`, never `DENY` (live preview loads the site in an admin iframe).
 - Live preview component from `@payloadcms/live-preview-react` (check docs) as small client leaf.
 
 ## 5. Revalidation (hooks)

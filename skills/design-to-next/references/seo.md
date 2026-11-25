@@ -27,8 +27,9 @@ constants/
 
 ## 3. Metadata
 
-- Root layout: `metadataBase` (url from `constants/site.ts`), title template `"%s | <Site>"`, default title, description, `openGraph`, `twitter`, `robots`, `alternates.canonical`.
-- **Every** public `page.tsx` exports `metadata` or `generateMetadata`. Dynamic routes: `generateMetadata` with real data.
+- Root layout: `metadataBase` (url from `constants/site.ts`), title template `"%s | <Site>"`, default title, description, `openGraph`, `twitter`, `robots`. **No `alternates.canonical` in root layout:** child pages that don't override it inherit home canonical → Google sees them as duplicates.
+- **Every** public `page.tsx` exports `metadata` or `generateMetadata` with its **own** `alternates.canonical` (relative path, resolved by `metadataBase`). Dynamic routes: `generateMetadata` with real data.
+- Next.js 16 streams metadata: browsers get `<meta>` tags streamed into `<body>`, bots (HTML-limited user agents) get them in `<head>`. Don't "fix" this.
 - SEO text in `constants/seo.ts` (dictionary when translations on).
 
 ## 4. Titles and descriptions
@@ -48,11 +49,13 @@ constants/
 Every public page gets JSON-LD matching its **visible** content (schema.org). Never describe what page doesn't show.
 
 - Home: `Organization` (or `LocalBusiness` if address) + `WebSite`.
-- FAQ section: `FAQPage`.
 - Nested pages (categories, products, posts): `BreadcrumbList`.
 - Product: `Product` with `offers` (price, currency, availability); `aggregateRating` only if ratings shown.
 - Category: `CollectionPage` (+ `ItemList` of shown products).
 - Blog post: `Article` / `BlogPosting` with `author`, `datePublished`, `dateModified`, `image`.
+- FAQ section: no `FAQPage` by default (Google shows FAQ rich results only for government / health sites). Add only if user asks.
+
+`dangerouslySetInnerHTML` only in `json-ld.tsx` (check.sh warns elsewhere).
 
 Typed with `schema-dts`, rendered via `components/seo/json-ld.tsx`:
 
@@ -77,7 +80,7 @@ export function JsonLd<T extends Thing>({ data }: { data: WithContext<T> }) {
 - Internal links with descriptive text, never "click here".
 - Short kebab-case URLs.
 - No layout shift: sized images, layout-matching skeletons.
-- LCP image `priority`, fonts via `next/font` (SKILL.md; matters most here).
+- LCP image `preload` (SKILL.md section 4 Images), fonts via `next/font` (SKILL.md; matters most here).
 
 ## 8. Sitemap and robots
 
@@ -88,7 +91,8 @@ export function JsonLd<T extends Thing>({ data }: { data: WithContext<T> }) {
 ## 9. Checklist
 
 - [ ] Every public page: own title (50–60, with brand) + description (140–160). No duplicates
-- [ ] Root layout: `metadataBase`, title template, Open Graph, Twitter, canonical
+- [ ] Root layout: `metadataBase`, title template, Open Graph, Twitter (no canonical)
+- [ ] Every public page: own `alternates.canonical`
 - [ ] OG image (1200×630) with `alt`
 - [ ] JSON-LD on every public page, matches visible content, typed with `schema-dts`
 - [ ] One `h1` per page with main keyword

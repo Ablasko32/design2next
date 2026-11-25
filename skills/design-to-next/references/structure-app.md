@@ -357,7 +357,8 @@ export function ProjectForm({ project }: { project?: Project }) {
     const res = project
       ? await updateProject({ ...values, id: project.id })
       : await createProject(values);
-    if (!res.ok) setServerError(res.error); // success = server redirect
+    // success = server redirect; then res can be undefined on the client
+    if (res && !res.ok) setServerError(res.error);
   });
 
   // fields with <label>, errors via aria-describedby (SKILL.md section 6),

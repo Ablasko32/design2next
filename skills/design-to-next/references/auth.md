@@ -40,8 +40,10 @@ proxy.ts                optimistic redirect for private routes (or middleware.ts
 - **`server-only` and the CLI:** CLI loads `lib/auth.ts` in plain Node, where `import "server-only"` throws. So `lib/auth.ts` doesn't import it. It still imports `lib/db` and `lib/env.ts`, which do → run CLI with `react-server` condition (there `server-only` is an empty module):
 
   ```bash
-  NODE_OPTIONS="--conditions=react-server" <pm> dlx @better-auth/cli generate
+  NODE_OPTIONS="--conditions=react-server" npx @better-auth/cli generate
   ```
+
+  Other package managers: `pnpm dlx`, `yarn dlx` or `bunx` in place of `npx` (npm has no `dlx`). Bun: `bunx` runs the CLI under Node (its `#!/usr/bin/env node` shebang), so `NODE_OPTIONS` still applies. Don't add `--bun`: then Bun's runtime runs it and `NODE_OPTIONS` is not the way to pass conditions (check Bun docs).
 
   Check docs for current CLI name / flags. `lib/auth.ts` stays safe: its secrets come from server-only modules, and `check.sh` errors if a client component imports it.
 
@@ -53,6 +55,24 @@ proxy.ts                optimistic redirect for private routes (or middleware.ts
 - Session = runtime data (`headers()`): **outside** `"use cache"`, inside `<Suspense>`. Cached queries take user / org id as argument.
 - Teams / tenants → Better Auth `organization` plugin, only if app needs it. `requireOrg()` gives `activeOrganizationId`; tenant filter in every query.
 - Sign-in / sign-up forms: react-hook-form + Zod, calling auth client. Errors never reveal whether an email exists.
+- **No open redirect:** `callbackUrl` / `next` after sign-in is user input. One helper, used everywhere. Resolve with `URL` and compare origin; never only `startsWith` checks (browsers strip tab / newline and read `\` as `/`, so `/\t/evil.com` becomes `//evil.com`):
+
+  ```ts
+  const BASE = "http://local.invalid"; // dummy origin, only for parsing
+
+  export function safeRedirectPath(value: string | null | undefined, fallback: string) {
+    if (!value) return fallback;
+    try {
+      const url = new URL(value, BASE);
+      if (url.origin !== BASE) return fallback;
+      const path = url.pathname + url.search + url.hash;
+      // "/..//evil.com" normalizes to "//evil.com" = protocol-relative, other site
+      return path.startsWith("//") || path.startsWith("/\\") ? fallback : path;
+    } catch {
+      return fallback;
+    }
+  }
+  ```
 - Private groups: `noindex`, blocked in `robots.ts` (SKILL.md section 9).
 - Sign-in / sign-up pages: own title, `noindex`.
 

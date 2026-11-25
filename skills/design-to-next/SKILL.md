@@ -153,6 +153,13 @@ Run `<pm> create next-app@latest --help` first (flags change). Then run **non-in
 
 - Not installed by default.
 - User asks: init into `components/ui/`, map its CSS vars to section 6 tokens. Never two token sets.
+- Generated components use `sm:` / `md:` / `lg:` → replace with `tablet:` / `desktop:` (section 6) right after adding each one. `check.sh` errors on default breakpoints.
+
+### Security headers
+
+- `next.config.ts` `headers()` for all routes: `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `X-Frame-Options: DENY` (or CSP `frame-ancestors 'none'`; with Payload live preview `SAMEORIGIN` / `'self'`, admin shows the site in an iframe), `Permissions-Policy` (turn off camera, microphone, geolocation unless used), `Strict-Transport-Security` (production).
+- CSP: static policy only if user asks. **No per-request nonce CSP by default:** it needs dynamic rendering of every page and breaks `cacheComponents` / static output.
+- `images.remotePatterns`: exact hostnames only, never `hostname: "**"`. No `dangerouslyAllowSVG: true` unless `contentSecurityPolicy` is set with it.
 
 ## 4. Folder structure
 
@@ -204,14 +211,14 @@ export const IMAGES = {
 ```
 
 ```tsx
-<Image {...IMAGES.hero.main} priority sizes="100vw" />
+<Image {...IMAGES.hero.main} preload sizes="100vw" />
 ```
 
 - **Always WebP.** Convert any PNG / JPG / GIF / TIFF before use: `node <this skill's dir>/scripts/to-webp.mjs assets/images --replace` from project root. Exceptions: SVG stays SVG; animated GIF kept (or video); OG images and icons in `app/` / `public/` stay PNG / JPG.
 - Static imports → Next.js knows width, height, blur placeholder.
-- Remote images: also in `IMAGES`, with `width` / `height`. Host in `images.remotePatterns`.
+- Remote images: also in `IMAGES`, with `width` / `height`. Host in `images.remotePatterns` (exact hostname, never `"**"`).
 - `alt` always in the constant. Decorative: `alt: ""`.
-- Always `next/image` with `sizes`. `priority` only on LCP image.
+- Always `next/image` with `sizes`. **No `priority`** (deprecated since Next.js 16). Known LCP image (hero): `preload`. LCP image that changes with viewport: `loading="eager"` + `fetchPriority="high"` on each candidate, no `preload`. Never `preload` together with `loading` / `fetchPriority`.
 
 ### Environment variables
 
@@ -383,7 +390,7 @@ export function Button({ className, variant, size, ...props }: ButtonProps) {
 - **Landing:** keep server simple. One Server Action per form (contact, newsletter) in `lib/actions/`, returns `{ ok, error }`. Details: `references/structure-landing.md`.
 - **Shop / app:** actions in `features/<domain>/actions.ts`, always through `authAction` / `publicAction` helper (session + Zod + safe errors), `updateTag` after writes. Details: `references/structure-app.md`.
 - **Email:** form must send mail (contact, newsletter, auth) → **ask which service before building**. Propose: Resend (simple API, React Email), Postmark, Brevo (also newsletters), Mailchimp (newsletter only), user's SMTP. Keys only via `lib/env.ts`. Send in Server Action, never client.
-- **Spam:** every public form gets honeypot + simple rate limit in action. Captcha (e.g. Cloudflare Turnstile) only if user asks or spam is known.
+- **Spam:** every public form gets honeypot + simple rate limit in action. In-memory `new Map()` limit doesn't work on serverless (each instance own memory, reset on cold start) → Upstash Redis / DB table, or a `// TODO: rate limit store` when host unknown. Captcha (e.g. Cloudflare Turnstile) only if user asks or spam is known.
 - **Personal data:** EU-facing → `references/legal-eu.md` (privacy notice, opt-in).
 - DB only when needed (`references/database.md`: which DB, local Docker or user's connection data). Then Drizzle only, never from client components.
 
@@ -452,7 +459,7 @@ No "done" until every item is checked. Report failed / skipped items.
 - [ ] No hardcoded links, site data, image paths in components
 - [ ] Every image in `assets/images/`, in `IMAGES` with `alt`, via `next/image`
 - [ ] Images WebP (except SVG, animated GIF, OG / icons)
-- [ ] LCP image `priority`. Fonts via `next/font`, Google Fonts when available
+- [ ] LCP image `preload` (or `loading="eager"` + `fetchPriority="high"`), no `priority`. Fonts via `next/font`, Google Fonts when available
 - [ ] One icon set, agreed with user
 
 **Accessibility**
@@ -469,11 +476,13 @@ No "done" until every item is checked. Report failed / skipped items.
 - [ ] Forms: react-hook-form + Zod on client, Zod again in action
 - [ ] DB (if any) only via Drizzle, never from client components
 - [ ] Route handlers only for webhooks / external API
+- [ ] Public forms: honeypot + rate limit with a store that works on the host
 
 **Env**
 
 - [ ] `.env.example` + `.env.local` if env used, `.env*.local` gitignored
 - [ ] Env only via `lib/env.ts` / `lib/env-public.ts`. No secret with `NEXT_PUBLIC_`
+- [ ] Security headers in `next.config.ts`. `remotePatterns` with exact hosts
 
 **SEO**
 

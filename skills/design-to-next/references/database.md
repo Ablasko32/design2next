@@ -111,7 +111,7 @@ export default defineConfig({
 
 - Scripts: `"db:generate": "drizzle-kit generate"`, `"db:migrate": "drizzle-kit migrate"`, `"db:studio": "drizzle-kit studio"`.
 - **Migrations, not `push`**, for anything shared or production. `push` only on a throwaway local DB.
-- `drizzle-kit` doesn't load `.env.local` by itself → load it in the script: `dotenv -e .env.local -- drizzle-kit ...` (package **`dotenv-cli`**, not `dotenv`), or `node --env-file=.env.local ./node_modules/.bin/drizzle-kit ...`.
+- `drizzle-kit` doesn't load `.env.local` by itself → load it in the script: `dotenv -e .env.local -- drizzle-kit ...` (package **`dotenv-cli`**, not `dotenv`). Not `node --env-file=... ./node_modules/.bin/drizzle-kit`: on Windows `.bin/` holds shell shims, not JS.
 - Better Auth Drizzle adapter: `provider` matches DB (`"pg"`, `"mysql"`, `"sqlite"`).
 - SQLite + Payload: Better Auth tables also need the `app_` prefix → set `modelName` per model in Better Auth config (`user`, `session`, `account`, `verification`) before generating (check docs).
 

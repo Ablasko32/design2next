@@ -31,13 +31,13 @@ It uses the standard `SKILL.md` format, so it works with Claude Code and with an
 
 ## How it works
 
-```mermaid
-flowchart LR
-    A["🎨 Design<br/>HTML/CSS · Figma<br/>screenshot"] --> B["🔍 Read<br/>tokens, fonts,<br/>copy, sections"]
-    B --> C["🗂️ Structure<br/>landing, shop<br/>or app"]
-    C --> D["🛠️ Build<br/>tokens → UI →<br/>pages"]
-    D --> E["✅ Verify<br/>3 screen sizes<br/>check.sh · build"]
-```
+**Design → Read → Structure → Build → Verify**
+
+1. **Design**: you give an HTML/CSS export, a Figma file or a screenshot.
+2. **Read**: the agent pulls out tokens, fonts, copy and sections.
+3. **Structure**: it picks the folder layout for a landing page, a shop or an app.
+4. **Build**: tokens first, then UI components, then pages.
+5. **Verify**: it checks three screen sizes, runs `check.sh` and builds the project.
 
 > **Default is `check` mode:** the agent builds the first slice (setup, tokens, fonts, hero), shows you screenshots and **waits for your OK** before building the rest. Use `auto` to go straight through; it lists every assumption at the end.
 
@@ -97,16 +97,24 @@ Every type: no `src/`, `app/` only holds routes, and nothing gets scaffolded tha
 
 ### Install
 
-**As a Claude Code plugin** (recommended, Claude Code 2.1.275+):
+**With the skills CLI** (recommended, works with Claude Code, Cursor, Codex and other agents):
+
+```bash
+npx skills add Ablasko32/design2next
+```
+
+It asks which agents to install for and puts the skill where each one looks for it.
+
+**As a Claude Code plugin** (Claude Code 2.1.275+):
 
 ```text
 /plugin marketplace add Ablasko32/design2next
 /plugin install design-to-next@design-to-next
 ```
 
-Updates arrive through the marketplace.
+Plugin updates arrive through the marketplace.
 
-**Or copy the skill** into any project:
+**Or copy it by hand** into any project:
 
 ```bash
 git clone https://github.com/Ablasko32/design2next
@@ -140,12 +148,12 @@ Or just ask: _"Use design2next to turn this design into a Next.js landing page. 
 
 ## Scripts
 
-Two helpers ship with the skill. The agent runs them from your project root, and you can run them too.
+Two helpers ship with the skill. The agent runs them from your project root, and you can run them too. The path below is for a project install in `.claude/skills/`; use your own skill folder if you installed it elsewhere.
 
-| Script                                                     | What it does                                                                                                                                                                                                                    |
-| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`check.sh`](skills/design-to-next/scripts/check.sh)       | Checks structure, tokens, server/client boundaries, images, env, database, CMS, SEO basics, auth and Stripe safety. Then runs typecheck, lint and format check (`--build` also builds). Exits `1` on errors, so it works in CI. |
-| [`to-webp.mjs`](skills/design-to-next/scripts/to-webp.mjs) | Converts PNG / JPG / GIF / TIFF in `assets/images` to WebP (`--replace` removes the originals).                                                                                                                                 |
+| Script                                                     | What it does                                                                                                                                                                                                                                                      |
+| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`check.sh`](skills/design-to-next/scripts/check.sh)       | Checks structure, tokens, server/client boundaries, images, env, database, CMS, SEO basics, auth and Stripe safety, image hosts and security headers. Then runs typecheck, lint and format check (`--build` also builds). Exits `1` on errors, so it works in CI. |
+| [`to-webp.mjs`](skills/design-to-next/scripts/to-webp.mjs) | Converts PNG / JPG / GIF / TIFF in `assets/images` to WebP (`--replace` removes the originals).                                                                                                                                                                   |
 
 ```bash
 bash .claude/skills/design-to-next/scripts/check.sh --build
