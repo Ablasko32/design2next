@@ -20,10 +20,10 @@ Then check Payload docs (https://payloadcms.com/docs) before coding: install ste
 
 ## 2. Files
 
-No `src/` (Payload templates use it; set paths below instead).
+Inside `src/`, like Payload's own templates (tree below is inside `src/`).
 
 ```
-payload.config.ts             root; buildConfig(...); reads process.env directly; no "server-only"
+payload.config.ts             src/payload.config.ts; buildConfig(...); reads process.env directly; no "server-only"
 payload-types.ts              generated (payload generate:types), never edited
 cms/
   collections/<name>.ts       users.ts (editors), media.ts, posts.ts, pages.ts, products.ts...
@@ -31,7 +31,7 @@ cms/
   hooks/revalidate.ts         afterChange / afterDelete → revalidateTag
   access/<rule>.ts            is-editor.ts, published-or-editor.ts
   blocks/<name>.ts            only with page builder (layout blocks)
-migrations/                   payload migrate:create output (Payload's own tables)
+migrations/                   src/migrations/, payload migrate:create output (Payload's own tables)
 app/
   (payload)/                  copied from Payload blank template: admin + /api. Never edited
   (frontend)/                 our site: root layout (html, fonts), loading, error, not-found, pages
@@ -45,25 +45,25 @@ Setup (check docs for current commands):
 - Install `payload @payloadcms/next @payloadcms/db-postgres @payloadcms/richtext-lexical sharp` and dev dependency `cross-env` (used by the `payload` script) (+ `@payloadcms/plugin-seo`, storage adapter when needed). Pin exact versions; all `@payloadcms/*` same version.
 - Copy `app/(payload)/` from Payload's blank template. Move our root layout into `app/(frontend)/`. **No `app/layout.tsx`** (two root layouts).
 - `next.config.ts`: `export default withPayload(nextConfig)`; keep `cacheComponents: true`. Payload is ESM-only.
-- `tsconfig.json` paths: `"@payload-config": ["./payload.config.ts"]`.
-- `package.json` scripts: `"payload": "cross-env PAYLOAD_CONFIG_PATH=payload.config.ts payload"`, `"generate:types": "<pm> run payload generate:types"`.
-- Env: `PAYLOAD_SECRET`, `DATABASE_URL`, storage keys. In `.env.example`. `payload.config.ts` reads `process.env` directly (CLI-loaded, like `drizzle.config.ts`); `cms/**` too (same reason; prefer passing values from `payload.config.ts`). App code still only via `lib/env.ts`.
+- `tsconfig.json` paths: `"@payload-config": ["./src/payload.config.ts"]`.
+- `package.json` scripts: `"payload": "cross-env PAYLOAD_CONFIG_PATH=src/payload.config.ts payload"`, `"generate:types": "<pm> run payload generate:types"`.
+- Env: `PAYLOAD_SECRET`, `DATABASE_URL`, storage keys. Keys in `.env.example`, values filled by user in `.env.local` (SKILL.md section 4, env). `payload.config.ts` reads `process.env` directly (CLI-loaded, like `drizzle.config.ts`); `cms/**` too (same reason; prefer passing values from `payload.config.ts`). App code still only via `lib/env.ts`.
 - `cms/**` and `payload.config.ts`: **never** `server-only` (Payload CLI loads them in plain Node).
 
 ## 3. Database
 
 Default: one Postgres, two owners. DB choice, Docker / connection data, SQLite / MongoDB variants: `references/database.md` (read it first).
 
-| Owner       | Postgres schema | Tables                              | Migrations                             |
-| ----------- | --------------- | ----------------------------------- | -------------------------------------- |
-| Payload     | `public`        | collections, globals, Payload users | `payload migrate` (dir `./migrations`) |
-| Our Drizzle | `app`           | Better Auth, cart, orders, app data | `drizzle-kit` (dir `./drizzle`)        |
+| Owner       | Postgres schema | Tables                              | Migrations                               |
+| ----------- | --------------- | ----------------------------------- | ---------------------------------------- |
+| Payload     | `public`        | collections, globals, Payload users | `payload migrate` (dir `src/migrations`) |
+| Our Drizzle | `app`           | Better Auth, cart, orders, app data | `drizzle-kit` (dir `./drizzle`)          |
 
 ```ts
 // payload.config.ts (part)
 db: postgresAdapter({
   pool: { connectionString: process.env.DATABASE_URL },
-  migrationDir: "./migrations",
+  migrationDir: "./src/migrations", // check docs: relative to cwd
 }),
 ```
 
@@ -81,9 +81,9 @@ schemaFilter: ["app"],
 ```
 
 - Better Auth tables: generate with CLI (`references/auth.md`), then define them on `app` (`app.table(...)` instead of `pgTable(...)`). Check Better Auth Drizzle docs for a schema option first.
-- Dev: Payload `push` syncs only its own tables. **Never accept a push / migration prompt that drops `app.*` tables.** Don't mix Payload `push` and Payload migrations on one DB.
-- Prod / CI: `payload migrate` then `drizzle-kit migrate`, then build.
-- Existing DB with data → backup before first Payload start.
+- Dev (local Docker DB only): Payload `push` syncs only its own tables. Payload / drizzle-kit **asks to drop or rename tables / data → stop, show the prompt to the user, never answer it yourself.** Don't mix Payload `push` and Payload migrations on one DB.
+- Prod / CI / user's own DB: user runs `payload migrate` then `drizzle-kit migrate`, then build (agent gives the commands, `references/database.md` section 3).
+- Existing DB with data → user backs up before first Payload start.
 - Payload content is **not** queried with our Drizzle client. Read through the Local API (section 4).
 
 ## 4. Reads (Local API)
@@ -210,7 +210,7 @@ export const revalidatePostDelete: CollectionAfterDeleteHook = ({
 
 ## 8. SEO and translations
 
-- `@payloadcms/plugin-seo` on public collections → meta title / description / image fields → page `generateMetadata` (rules from `references/seo.md`; fallback from `constants/seo.ts`).
+- `@payloadcms/plugin-seo` on public collections → meta title / description / image fields → page `generateMetadata` (rules from `references/seo.md`; fallback from `seo.*` in messages).
 - `sitemap.ts`: published docs from cached query.
 - With i18n: Payload `localization` → full setup in `references/i18n.md` section 9.
 

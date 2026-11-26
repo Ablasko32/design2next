@@ -50,7 +50,7 @@ NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=   # only with embedded checkout / Elements
 - Customer: create / reuse one Stripe Customer per user (`stripeCustomerId` on user) when auth on.
 - Subscriptions: access from status **stored by webhook**, not a Stripe call per request.
 - Prices on page: `Intl.NumberFormat` with currency; EU consumers → **with VAT**.
-- Local testing: Stripe CLI `stripe listen --forward-to localhost:3000/api/webhooks/stripe`. Give user the command; never commit its secret.
+- Local testing: Stripe CLI `stripe listen --forward-to localhost:3000/api/webhooks/stripe`. Give user the command; user puts the printed `whsec_...` into `.env.local` (agent never sees or writes it).
 
 ## 4. Checklist
 

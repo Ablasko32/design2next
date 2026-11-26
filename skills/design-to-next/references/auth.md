@@ -36,7 +36,7 @@ proxy.ts                optimistic redirect for private routes (or middleware.ts
 ```
 
 - Auth tables: generate with Better Auth CLI into Drizzle schema, then run Drizzle migration. Never by hand.
-- Env: `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, provider keys. All server only, via `lib/env.ts`.
+- Env: `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, provider keys. All server only, via `lib/env.ts`. Keys in `.env.example`; user generates / fills values in `.env.local` (secret: `openssl rand -base64 32`, run by user).
 - **`server-only` and the CLI:** CLI loads `lib/auth.ts` in plain Node, where `import "server-only"` throws. So `lib/auth.ts` doesn't import it. It still imports `lib/db` and `lib/env.ts`, which do → run CLI with `react-server` condition (there `server-only` is an empty module):
 
   ```bash

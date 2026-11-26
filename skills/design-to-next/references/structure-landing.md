@@ -7,6 +7,7 @@ Simple: pages are made of sections. No `features/`.
 ## 1. Tree
 
 ```
+src/                    all code (SKILL.md section 4)
 app/
   layout.tsx            root layout, fonts, global metadata
   globals.css           tokens + Tailwind theme (SKILL.md section 6)
@@ -33,21 +34,33 @@ lib/
   db/index.ts, db/schema.ts     only with a database (Drizzle)
   env.ts                server env, only when env used
   env-public.ts         NEXT_PUBLIC_ env, only when needed
+  routing.ts            href() (+ matchRoute, pageAlternates with i18n)
+  i18n/messages.ts      getMessages() (server-only)
 constants/
-  site.ts               site name, url, socials, contact
-  navigation.ts         nav and footer links
-  images.ts             every image the app uses
-  seo.ts                titles, descriptions per page, only with SEO
+  routes.ts             ROUTES: every internal URL (SKILL.md section 4, Routes)
+  site.ts               site name, socials, fixed site data (no URL / contact: env)
+  navigation.ts         nav and footer: route key + message key
+  images.ts             every image the app uses (alt = message key)
+  i18n.ts               locales, only with translations
+messages/
+  hr.json               all UI + SEO text (seo.<page>.*), one file per language
 assets/
   images/               statically imported images, by section, WebP
-  fonts/                only for fonts not on Google Fonts (woff2)
+  fonts/                woff2, always (local fonts, used weights + subsets)
 types/
-public/                 only files needing a fixed URL (OG image, verification)
-.env.example            committed, keys only (only when env used)
-.env.local              gitignored, real values (only when env used)
-drizzle.config.ts       only with a database
+proxy.ts                only with translations (references/i18n.md)
 payload.config.ts, cms/, migrations/   only with CMS (references/cms.md)
+
+root (next to src/, config only):
+public/                 only files needing a fixed URL (verification, models)
+.env.example            committed, keys + comments, no values (agent writes this)
+.env.local              gitignored, filled by the user only
+drizzle.config.ts       only with a database
+compose.yaml            only with local Docker DB
+package.json, next.config.ts, tsconfig.json, eslint / prettier config
 ```
+
+Tree from `app/` to `proxy.ts` = inside `src/`.
 
 With CMS: root layout + loading / error / not-found move to `app/(frontend)/`, `app/(payload)/` = Payload admin.
 
@@ -62,6 +75,8 @@ Growing into shop / app (accounts, cart, dashboard) → switch to `references/st
 
 ## 3. Checklist
 
+- [ ] Code in `src/`, root only config; tree matches section 1
 - [ ] No `features/`; one file per design block in `components/sections/`
+- [ ] Text in `messages/`, URLs via `href()`, no URL / contact in `constants/site.ts`
 - [ ] One action per form, `{ ok, error }`, Zod on client + server
 - [ ] Reads (if any) in `lib/queries/` with `server-only`, `cacheLife`, `cacheTag`

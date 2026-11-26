@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Automated part of the design-to-next final checklist.
-# Run from the Next.js project root:
+# Run from the Next.js project root (code lives in src/). Source paths are reported relative to src/,
+# root files (next.config.ts, compose.yaml...) by their name:
 #   bash <skill-dir>/scripts/check.sh           static checks + typecheck, lint, format:check
 #   bash <skill-dir>/scripts/check.sh --build   also runs the production build
 #   bash <skill-dir>/scripts/check.sh --fast    static checks only
@@ -25,6 +26,8 @@ fi
 
 errors=0
 warnings=0
+ROOT=$(pwd)
+DRIZZLE_CFG="$ROOT/drizzle.config.ts"   # root config file
 
 if [[ -t 1 ]]; then
   RED=$'\e[31m'; YEL=$'\e[33m'; GRN=$'\e[32m'; DIM=$'\e[2m'; RST=$'\e[0m'
@@ -32,13 +35,27 @@ else
   RED=""; YEL=""; GRN=""; DIM=""; RST=""
 fi
 
-err()  { echo "${RED}ERROR${RST} $1"; [[ -n "${2:-}" ]] && echo "$2" | sed "s/^/  ${DIM}/;s/\$/${RST}/"; errors=$((errors + 1)); }
-warn() { echo "${YEL}WARN ${RST} $1"; [[ -n "${2:-}" ]] && echo "$2" | sed "s/^/  ${DIM}/;s/\$/${RST}/"; warnings=$((warnings + 1)); }
-ok()   { echo "${GRN}ok   ${RST} $1"; }
+# Root files are checked via "$ROOT/...": strip that prefix in output, so root files show by name
+rel()  { [[ -n "${ROOT:-}" ]] && echo "${1//$ROOT\//}" || echo "$1"; }
+err()  { echo "${RED}ERROR${RST} $(rel "$1")"; [[ -n "${2:-}" ]] && rel "$2" | sed "s/^/  ${DIM}/;s/\$/${RST}/"; errors=$((errors + 1)); }
+warn() { echo "${YEL}WARN ${RST} $(rel "$1")"; [[ -n "${2:-}" ]] && rel "$2" | sed "s/^/  ${DIM}/;s/\$/${RST}/"; warnings=$((warnings + 1)); }
+ok()   { echo "${GRN}ok   ${RST} $(rel "$1")"; }
+
+# All code lives in src/ (SKILL.md section 4). Source checks run inside it, root files via $ROOT.
+if [[ ! -d src ]]; then
+  echo "${RED}ERROR${RST} no src/ folder (skill: all code in src/, root only config)."
+  exit 1
+fi
+cd src || exit 2
+for d in app components lib constants features cms messages assets types migrations; do
+  [[ -d "$ROOT/$d" ]] && echo "${RED}ERROR${RST} $d/ in project root (move into src/)" && errors=$((errors + 1))
+done
 
 # Source dirs that exist
 DIRS=()
 for d in app components features cms lib constants types; do [[ -d "$d" ]] && DIRS+=("$d"); done
+# Files at the top of src/ (proxy.ts, payload.config.ts, instrumentation.ts...) are code too
+for f in *.ts *.tsx; do [[ -f "$f" && "$f" != *.d.ts ]] && DIRS+=("$f"); done
 if (( ${#DIRS[@]} == 0 )); then
   echo "${RED}ERROR${RST} no source folders yet (app/, components/, lib/...). Nothing to check."
   exit 1
@@ -76,7 +93,7 @@ check() {
 
 echo "== Structure"
 
-[[ -d src ]] && err "src/ folder exists (skill: no src/)" || ok "no src/"
+ok "code in src/"
 
 # Root layout(s) (SKILL.md section 4): app/layout.tsx with <html>; else every app/[lang]/, app/(group)/,
 # app/(group)/[lang]/ layout that renders <html> (i18n, Payload, several root layouts)
@@ -146,7 +163,17 @@ out=$(src_grep "from ['\"]motion|from ['\"]framer-motion" )
 [[ -n "$out" ]] && warn "motion is used: make sure CSS could not do it" "$out" || ok "no motion"
 
 out=$(grep -rnE --exclude-dir='(payload)' --include='*.ts' --include='*.tsx' --include='*.css' 'fonts\.(googleapis|gstatic)\.com' "${DIRS[@]}" 2>/dev/null)
-check err "Google Fonts loaded from Google (use next/font/google)" "$out" "no direct Google Fonts requests"
+check err "Google Fonts loaded from Google (local woff2 + next/font/local)" "$out" "no direct Google Fonts requests"
+
+out=$(src_grep "from ['\"]next/font/google['\"]")
+check err "next/font/google used (fonts always local: woff2 in assets/fonts/ + next/font/local)" "$out" "fonts via next/font/local"
+
+# Type scale: short list of --text-* sizes (not --text-x--line-height etc.)
+if [[ -f app/globals.css ]]; then
+  n_text=$(grep -oE -- '--text-[a-z0-9]+(-[a-z0-9]+)*:' app/globals.css | grep -v -- '--text-[a-z0-9-]*--' | sort -u | wc -l | tr -d ' ')
+  if (( n_text > 14 )); then warn "$n_text --text-* size tokens in app/globals.css (type scale ≈ 6-12 by role, no per-component sizes: references/tokens.md)"
+  else ok "type scale: $n_text --text-* tokens"; fi
+fi
 
 echo
 echo "== Server and client"
@@ -179,12 +206,12 @@ check err "missing import \"server-only\"" "${missing%$'\n'}" "server-only where
 
 # Files loaded by CLI tools in plain Node must NOT import server-only (it throws there)
 cli_bad=""
-cli_files=(lib/db/schema.ts lib/auth.ts drizzle.config.ts)
+cli_files=(lib/db/schema.ts lib/auth.ts "$DRIZZLE_CFG")
 [[ -d lib/db/schema ]] && while IFS= read -r f; do cli_files+=("$f"); done < <(find lib/db/schema -type f -name '*.ts')
 for f in "${cli_files[@]}"; do
   [[ -f "$f" ]] && grep -qE "^import ['\"]server-only['\"]" "$f" && cli_bad+="$f"$'\n'
 done
-[[ -f drizzle.config.ts ]] && grep -qE "from ['\"]@/lib/env['\"]|from ['\"]\./lib/env['\"]" drizzle.config.ts && cli_bad+="drizzle.config.ts (imports lib/env.ts)"$'\n'
+[[ -f "$DRIZZLE_CFG" ]] && grep -qE "from ['\"]@/lib/env['\"]|from ['\"]\.?\.?/?(src/)?lib/env['\"]" "$DRIZZLE_CFG" && cli_bad+="drizzle.config.ts (imports lib/env.ts)"$'\n'
 check err "server-only in a file loaded by drizzle-kit / Better Auth CLI (breaks the CLI)" "${cli_bad%$'\n'}" "CLI-loaded files without server-only"
 
 if [[ -d lib/queries || -d features ]]; then
@@ -261,12 +288,12 @@ if [[ -n "$HAS_PAYLOAD" ]]; then
   [[ -f app/layout.tsx ]] && err "app/layout.tsx next to Payload (move own root layout into app/(frontend)/)" || ok "own root layout in a route group"
 
   # Our Drizzle tables kept apart from Payload's (references/database.md section 5)
-  if [[ -f drizzle.config.ts ]] && ! grep -q "db-mongodb" payload.config.ts; then   # Mongo: our tables in a separate SQL DB
-    if grep -qE "dialect:[[:space:]]*['\"]postgresql" drizzle.config.ts; then
-      grep -q "schemaFilter" drizzle.config.ts && ok "drizzle.config.ts has schemaFilter" \
+  if [[ -f "$DRIZZLE_CFG" ]] && ! grep -q "db-mongodb" payload.config.ts; then   # Mongo: our tables in a separate SQL DB
+    if grep -qE "dialect:[[:space:]]*['\"]postgresql" "$DRIZZLE_CFG"; then
+      grep -q "schemaFilter" "$DRIZZLE_CFG" && ok "drizzle.config.ts has schemaFilter" \
         || warn "Postgres + Payload: drizzle.config.ts without schemaFilter (own tables in pgSchema(\"app\"), schemaFilter: [\"app\"])"
-    elif grep -qE "dialect:[[:space:]]*['\"](sqlite|turso)" drizzle.config.ts; then
-      grep -q "tablesFilter" drizzle.config.ts && ok "drizzle.config.ts has tablesFilter" \
+    elif grep -qE "dialect:[[:space:]]*['\"](sqlite|turso)" "$DRIZZLE_CFG"; then
+      grep -q "tablesFilter" "$DRIZZLE_CFG" && ok "drizzle.config.ts has tablesFilter" \
         || warn "SQLite + Payload: drizzle.config.ts without tablesFilter (own tables prefixed app_, tablesFilter: [\"app_*\"])"
     fi
   fi
@@ -301,38 +328,55 @@ check err "image imported from public/ (use assets/images/)" "$out" "no imports 
 out=$(comp_grep '(href|src)=["'"'"'](https?:|mailto:|tel:)')
 check warn "hardcoded external link in a component (put it in constants/)" "$out" "no hardcoded external links"
 
-out=$(src_grep 'process\.env' | grep -vE '^(lib/env(-public)?\.ts|cms/[^:]+):')   # cms/** is Payload CLI-loaded (no server-only)
+# UI text lives in messages/<lang>.json (SKILL.md section 4, Text)
+if [[ -d messages ]] && ls messages/*.json >/dev/null 2>&1; then ok "messages/<lang>.json present"
+else err "no messages/<lang>.json (all UI text goes there, also with one language)"; fi
+
+# Deploy / owner values belong in env, not constants/
+if [[ -d constants ]]; then
+  # Site URL keys anywhere; a bare top-level `url:` (2-space indent) only in site.ts. Social links (`href` / nested `url`) are fine.
+  out=$( {
+    grep -rnE --include='*.ts' "(siteUrl|baseUrl|domain|origin)[\"']?[[:space:]]*:[[:space:]]*['\"\`]https?://" constants 2>/dev/null
+    [[ -f constants/site.ts ]] && grep -nE "^  url[[:space:]]*:[[:space:]]*['\"\`]https?://" constants/site.ts | sed 's#^#constants/site.ts:#'
+    grep -rnE --include='*.ts' "['\"\`](mailto:)?[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-z]{2,}['\"\`]|['\"\`](tel:)?\+?[0-9][0-9 ]{7,}['\"\`]" constants 2>/dev/null
+  } | sort -u )
+  check warn "site URL / email / phone in constants/ (env: NEXT_PUBLIC_SITE_URL, NEXT_PUBLIC_CONTACT_*)" "$out" "no site URL / contact data in constants/"
+fi
+
+out=$(src_grep 'process\.env' | grep -vE '^(lib/env(-public)?\.ts|payload\.config\.ts|instrumentation(-client)?\.ts|cms/[^:]+):' | grep -vE 'process\.env\.NEXT_RUNTIME\b')   # instrumentation: Next.js-documented NEXT_RUNTIME switch   # cms/** is Payload CLI-loaded (no server-only)
 check err "process.env outside lib/env.ts / lib/env-public.ts (and cms/)" "$out" "env read only through lib/env*"
 
 if [[ -f lib/env.ts || -f lib/env-public.ts ]]; then
-  [[ -f .env.example ]] && ok ".env.example exists" || err "env is used but .env.example is missing"
+  [[ -f "$ROOT/.env.example" ]] && ok ".env.example exists" || err "env is used but .env.example is missing"
 fi
 # Database (references/database.md)
-if [[ -d lib/db || -f drizzle.config.ts || -f payload.config.ts ]]; then
-  if [[ -f .env.example ]]; then
-    grep -qE '^(DATABASE_URL|DATABASE_URI)=' .env.example && ok "DATABASE_URL in .env.example" \
+if [[ -d lib/db || -f "$DRIZZLE_CFG" || -f payload.config.ts ]]; then
+  if [[ -f "$ROOT/.env.example" ]]; then
+    grep -qE '^(DATABASE_URL|DATABASE_URI)=' "$ROOT/.env.example" && ok "DATABASE_URL in .env.example" \
       || err "database used but DATABASE_URL missing in .env.example"
   elif [[ ! -f lib/env.ts && ! -f lib/env-public.ts ]]; then   # else reported once by the env block
     err "database used but .env.example is missing (DATABASE_URL=)"
   fi
-  compose=$(ls compose.yaml compose.yml docker-compose.yml docker-compose.yaml 2>/dev/null | head -1)
+  compose=$(cd "$ROOT" && ls compose.yaml compose.yml docker-compose.yml docker-compose.yaml 2>/dev/null | head -1)
+  [[ -n "$compose" ]] && compose="$ROOT/$compose"
   if [[ -n "$compose" ]]; then
     grep -q "healthcheck" "$compose" && ok "$compose has a healthcheck" || warn "$compose without healthcheck (wait for DB before migrating)"
     grep -qE '^volumes:' "$compose" && ok "$compose keeps data in a volume" || warn "$compose without named volume (data lost on recreate)"
   fi
-  if [[ -f drizzle.config.ts ]] && grep -qE "dialect:[[:space:]]*['\"](sqlite|turso)" drizzle.config.ts && [[ -f .gitignore ]]; then
-    grep -qE '(^|/)(data(/.*)?|[^ ]*\.db|[^ ]*\.sqlite3?)$' .gitignore && ok "SQLite files gitignored" || warn "SQLite DB file not in .gitignore (add data/ or *.db)"
+  if [[ -f "$DRIZZLE_CFG" ]] && grep -qE "dialect:[[:space:]]*['\"](sqlite|turso)" "$DRIZZLE_CFG" && [[ -f "$ROOT/.gitignore" ]]; then
+    grep -qE '(^|/)(data(/.*)?|[^ ]*\.db|[^ ]*\.sqlite3?)$' "$ROOT/.gitignore" && ok "SQLite files gitignored" || warn "SQLite DB file not in .gitignore (add data/ or *.db)"
   fi
 fi
 
-if [[ -f .gitignore ]] && ! grep -qE '^\.env(\*|\.\*|\*\.local|.*local)' .gitignore; then
+if [[ -f "$ROOT/.gitignore" ]] && ! grep -qE '^\.env(\*|\.\*|\*\.local|.*local)' "$ROOT/.gitignore"; then
   err ".gitignore does not cover .env*.local"
 fi
-if [[ -f .env.example ]] && grep -qE '^NEXT_PUBLIC_[A-Z_]*(SECRET|TOKEN|PASSWORD|PRIVATE)' .env.example; then
-  err "secret-looking NEXT_PUBLIC_ var in .env.example" "$(grep -nE '^NEXT_PUBLIC_[A-Z_]*(SECRET|TOKEN|PASSWORD|PRIVATE)' .env.example)"
+if [[ -f "$ROOT/.env.example" ]] && grep -qE '^NEXT_PUBLIC_[A-Z_]*(SECRET|TOKEN|PASSWORD|PRIVATE)' "$ROOT/.env.example"; then
+  err "secret-looking NEXT_PUBLIC_ var in .env.example" "$(grep -nE '^NEXT_PUBLIC_[A-Z_]*(SECRET|TOKEN|PASSWORD|PRIVATE)' "$ROOT/.env.example")"
 fi
 
-NEXT_CONFIG=$(ls next.config.ts next.config.mts next.config.mjs next.config.js next.config.cjs 2>/dev/null | head -1)
+NEXT_CONFIG=$(cd "$ROOT" && ls next.config.ts next.config.mts next.config.mjs next.config.js next.config.cjs 2>/dev/null | head -1)
+[[ -n "$NEXT_CONFIG" ]] && NEXT_CONFIG="$ROOT/$NEXT_CONFIG"
 [[ -z "$NEXT_CONFIG" ]] && warn "no next.config.* found (image host / security header checks skipped)"
 if [[ -n "$NEXT_CONFIG" ]]; then
   # any * in a host: "**", "*.cdn.com", "**.amazonaws.com", also new URL("https://**.x.com/...")
@@ -350,6 +394,8 @@ if [[ -n "$NEXT_CONFIG" ]]; then
     grep -rqE --include='*.ts' --include='*.mts' --include='*.mjs' --include='*.js' --include='*.cjs' "$h" "${hdr_src[@]}" 2>/dev/null || missing_h+="$h"$'\n'
   done
   check warn "security headers missing (SKILL.md section 3)" "${missing_h%$'\n'}" "security headers set"
+  out=$(grep -rnE --include='*.ts' --include='*.mts' --include='*.mjs' --include='*.js' --include='*.cjs' "browsing-topics|interest-cohort" "${hdr_src[@]}" 2>/dev/null)
+  check err "Permissions-Policy with browsing-topics / interest-cohort (Chrome: \"Unrecognized feature\")" "$out" "Permissions-Policy without withdrawn features"
 fi
 
 echo
@@ -371,7 +417,45 @@ if [[ -d app ]]; then
 
   for rl in ${ROOT_LAYOUTS[@]+"${ROOT_LAYOUTS[@]}"}; do
     grep -qE '<html[^>]*lang=' "$rl" && ok "lang on <html> ($rl)" || err "no lang on <html> in $rl"
+    # (?:=>|[^>]) lets arrow functions in JSX props through (className={fonts.map((f) => f.variable)...})
+    if perl -0777 -ne 'exit((/<html\b(?:=>|[^>])*?\bsuppressHydrationWarning/s && /<body\b(?:=>|[^>])*?\bsuppressHydrationWarning/s) ? 0 : 1)' "$rl" 2>/dev/null; then
+      ok "suppressHydrationWarning on <html> + <body> ($rl)"
+    else
+      warn "no suppressHydrationWarning on <html> / <body> in $rl (browser extensions add attributes there)"
+    fi
   done
+
+  if [[ -f app/sitemap.ts ]]; then   # public pages with full SEO only (apps / dashboards: basics)
+    og=$(find app -path 'app/(payload)' -prune -o -type f \( -name 'opengraph-image.png' -o -name 'opengraph-image.jpg' -o -name 'opengraph-image.jpeg' -o -name 'opengraph-image.tsx' -o -name 'opengraph-image.ts' -o -name 'opengraph-image.js' \) -print 2>/dev/null | head -1)
+    [[ -n "$og" ]] && ok "OG image: $og" || warn "no opengraph-image in app/ (tell user: OG image missing, references/seo.md)"
+  fi
+
+  # i18n: sitemap needs hreflang alternates + x-default (references/i18n.md section 8)
+  if [[ -d "app/[lang]" || -n "$(find app -maxdepth 2 -type d -name '[[]lang[]]' 2>/dev/null)" ]]; then
+    if [[ -f app/sitemap.ts ]]; then
+      grep -q "alternates" app/sitemap.ts && ok "sitemap.ts has alternates" || err "i18n: sitemap.ts entries without alternates.languages"
+      grep -rqE "x-default" app/sitemap.ts lib 2>/dev/null && ok "x-default used" || err "i18n: no x-default in sitemap / alternates helper"
+    fi
+  fi
+
+  if [[ -f app/robots.ts ]] && grep -qE "/api/?['\"]" app/robots.ts \
+     && [[ -z "$(find app -type d -name api -print -quit 2>/dev/null)" && -z "$(find app -type f -name 'route.*' -path '*/api/*' -print -quit 2>/dev/null)" ]]; then
+    warn "robots.ts disallows /api/ but the project has no API routes (disallow only what exists)"
+  fi
+fi
+
+cd "$ROOT" || exit 2
+
+echo
+echo "== Lint setup"
+grep -q '"eslint-plugin-better-tailwindcss"' package.json && ok "eslint-plugin-better-tailwindcss installed" \
+  || err "eslint-plugin-better-tailwindcss missing (dev dependency, rule enforce-canonical-classes)"
+ESLINT_CFG=$(ls eslint.config.* 2>/dev/null | head -1)
+if [[ -n "$ESLINT_CFG" ]]; then
+  grep -q "enforce-canonical-classes\|better-tailwindcss" "$ESLINT_CFG" && ok "better-tailwindcss configured in $ESLINT_CFG" \
+    || err "better-tailwindcss not configured in $ESLINT_CFG"
+else
+  err "no eslint.config.* (flat config) in project root (legacy .eslintrc not supported by the skill setup)"
 fi
 
 if [[ "$MODE" != "fast" ]]; then
@@ -396,11 +480,12 @@ if [[ "$MODE" != "fast" ]]; then
   if has_script typecheck; then run typecheck $PM run typecheck; else err "no \"typecheck\" script in package.json"; fi
   if has_script lint; then run lint $PM run lint; else err "no \"lint\" script in package.json"; fi
   has_script format || err "no \"format\" script in package.json"
+  has_script "lint:fix" || err "no \"lint:fix\" script in package.json (eslint --fix)"
   if has_script "format:check"; then run "format:check" $PM run format:check; else err "no \"format:check\" script in package.json (prettier --check .)"; fi
   if [[ "$MODE" == "build" ]]; then run build $PM run build; fi
 fi
 
 echo
 echo "== Result: $errors error(s), $warnings warning(s)"
-echo "${DIM}Not checked here (do it by hand): design match in the browser, console errors, Suspense fallbacks, token flow in globals.css, SEO text quality, reference checklists.${RST}"
+echo "${DIM}Not checked here (do it by hand): design match in the browser, console errors, Suspense fallbacks, token flow in globals.css, SEO text quality, Lighthouse, reference checklists.${RST}"
 (( errors > 0 )) && exit 1 || exit 0

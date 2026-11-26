@@ -4,7 +4,7 @@
 //
 //   node <skill-dir>/scripts/to-webp.mjs [dir-or-file ...] [--replace] [--quality=82] [--max-width=2560]
 //
-// Default target: assets/images
+// Default target: src/assets/images
 // --replace       delete the original after a successful conversion
 // Skips: .webp, .svg, .ico, .avif, animated GIFs, and anything inside public/ or app/
 // (OG images, favicons and icons there keep their format for compatibility).
@@ -22,7 +22,7 @@ const flags = Object.fromEntries(
   }),
 );
 const targets = args.filter((a) => !a.startsWith("--"));
-if (targets.length === 0) targets.push("assets/images");
+if (targets.length === 0) targets.push("src/assets/images");
 
 const quality = Number(flags.quality ?? 82);
 const maxWidth = Number(flags["max-width"] ?? 2560);

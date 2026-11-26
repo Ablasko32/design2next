@@ -9,6 +9,7 @@ Examples below: Drizzle (Postgres) + Better Auth. Check current Next.js, Drizzle
 ## 1. Tree
 
 ```
+src/                    all code (SKILL.md section 4); tree from app/ to proxy.ts is inside it
 app/
   layout.tsx            root layout, fonts, global metadata
   globals.css           tokens + Tailwind theme (SKILL.md section 6)
@@ -48,22 +49,32 @@ lib/
   auth.ts, auth-client.ts       references/auth.md
   stripe.ts             references/payments.md
   utils.ts              cn() and small helpers
+  routing.ts            href() (+ matchRoute, pageAlternates with i18n)
+  i18n/messages.ts      getMessages() (server-only)
   env.ts                server env
   env-public.ts         NEXT_PUBLIC_ env, only when needed
 constants/
-  site.ts               site name, url, socials, contact
-  navigation.ts         nav links + ROUTES (route builders: ROUTES.project(id))
-  images.ts             every image the app uses
-  seo.ts                public pages only
+  routes.ts             ROUTES: every internal URL, also dynamic (project: "/projects/[id]")
+  site.ts               site name, socials, fixed site data (no URL / contact: env)
+  navigation.ts         nav: route key + message key
+  images.ts             every image the app uses (alt = message key)
+  i18n.ts               locales, only with translations
+messages/
+  hr.json               all UI text, error keys → text, SEO text for public pages
 assets/
   images/               statically imported images, by section, WebP
-  fonts/                only for fonts not on Google Fonts (woff2)
+  fonts/                woff2, always (local fonts, used weights + subsets)
 types/
-public/                 only files needing a fixed URL
-.env.example            committed, keys only
-.env.local              gitignored, real values
-drizzle.config.ts
+proxy.ts                only with translations / optimistic auth redirect
 payload.config.ts, cms/, migrations/   only with CMS (references/cms.md)
+
+root (next to src/, config only):
+public/                 only files needing a fixed URL
+.env.example            committed, keys + comments, no values (agent writes this)
+.env.local              gitignored, filled by the user only
+drizzle.config.ts, drizzle/     with a database
+compose.yaml            local Docker DB
+package.json, next.config.ts, tsconfig.json, eslint / prettier config
 ```
 
 With CMS: root layout + loading / error / not-found move to `app/(frontend)/` (route groups above live inside it), `app/(payload)/` = Payload admin. Our Drizzle tables then kept apart from Payload's (Postgres: `pgSchema("app")`; other DBs: `references/database.md` section 5).
@@ -102,7 +113,7 @@ import { cache } from "react";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
-import { ROUTES } from "@/constants/navigation";
+import { href } from "@/lib/routing";
 
 // One session lookup per request, however many components ask
 export const getSession = cache(async () =>
@@ -112,7 +123,7 @@ export const getSession = cache(async () =>
 // Pages and queries: no session → sign-in
 export async function requireUser() {
   const session = await getSession();
-  if (!session) redirect(ROUTES.signIn);
+  if (!session) redirect(href("signIn"));
   return session.user;
 }
 ```
@@ -241,7 +252,7 @@ export function authAction<S extends z.ZodType, T>(
 
 - `publicAction(schema, handler)`: same without session (guest cart, newsletter). Public forms: honeypot + rate limit (SKILL.md section 8).
 - Roles: `authAction` variant or check `user.role` first line of handler.
-- Error strings = keys; UI maps to text (or dictionary with i18n).
+- Error strings = keys; UI maps to text (text in messages).
 
 Schemas:
 
@@ -280,7 +291,7 @@ import { ActionError, authAction } from "@/lib/action-helpers";
 import { cacheTags } from "@/lib/cache-tags";
 import { db } from "@/lib/db";
 import { projects } from "@/lib/db/schema";
-import { ROUTES } from "@/constants/navigation";
+import { href } from "@/lib/routing";
 import { projectSchema } from "./schemas";
 
 export const createProject = authAction(projectSchema, async (input, user) => {
@@ -289,7 +300,7 @@ export const createProject = authAction(projectSchema, async (input, user) => {
     .values({ ...input, userId: user.id })
     .returning({ id: projects.id });
   updateTag(cacheTags.userProjects(user.id));
-  redirect(ROUTES.project(row.id)); // after updateTag; helper rethrows it
+  redirect(href("project", { params: { id: row.id } })); // after updateTag; helper rethrows it
 });
 
 export const updateProject = authAction(
@@ -303,7 +314,7 @@ export const updateProject = authAction(
     if (!row) throw new ActionError("not_found"); // other tenant's or missing id
     updateTag(cacheTags.userProjects(user.id));
     updateTag(cacheTags.project(id));
-    redirect(ROUTES.project(id));
+    redirect(href("project", { params: { id } }));
   },
 );
 
@@ -317,12 +328,13 @@ export const deleteProject = authAction(
     if (!row) throw new ActionError("not_found");
     updateTag(cacheTags.userProjects(user.id));
     updateTag(cacheTags.project(id));
-    redirect(ROUTES.projects);
+    redirect(href("projects"));
   },
 );
 ```
 
 - `"use server"` file exports only actions. Helpers / constants elsewhere.
+- URLs only via `href()` from `constants/routes.ts` (SKILL.md section 4, Routes). With i18n pass the user's locale: `href("project", { locale, params: { id } })`.
 - Update / delete check the row was hit (`.returning()`), else `ActionError("not_found")`. MySQL has no `.returning()` → check affected rows.
 - Every write ends with `updateTag` for list + item tags it touched.
 
@@ -425,7 +437,9 @@ features/
 
 ## 8. Checklist
 
+- [ ] Code in `src/`, root only config; tree matches section 1
 - [ ] No `lib/queries/`, `lib/actions/`, `lib/validations/`; domain code in `features/<domain>/`
+- [ ] URLs (links, `redirect()`) only via `href()`; text in `messages/`
 - [ ] `app/` only routes; pages arrange feature components + `<Suspense>`
 - [ ] Features import other features only via `queries` / `actions` / `schemas`
 - [ ] All tags from `lib/cache-tags.ts`; `updateTag` only in actions, `revalidateTag` in route handlers

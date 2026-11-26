@@ -11,7 +11,7 @@ Go through project, list each that applies + short fix note:
 - **Forms with personal data** (contact, newsletter, sign-up, checkout): short notice by submit button, link to privacy policy. Newsletter: explicit opt-in (unticked checkbox) + double opt-in via email service.
 - **Third parties receiving data:** email service, analytics, hosting, payment, maps, chat widgets. Each goes in privacy policy. US services → tell user (data leaves EU).
 - **Cookie-setting embeds:** YouTube (`youtube-nocookie.com` + click-to-load), Google Maps (click-to-load or static image), social widgets. Load only after consent or click.
-- **Fonts:** `next/font` self-hosts Google Fonts, no request to Google. Never `<link>` to `fonts.googleapis.com`.
+- **Fonts:** always local woff2 via `next/font/local` (SKILL.md section 7), no request to Google. Never `next/font/google`, never `<link>` to `fonts.googleapis.com`.
 - **Analytics:** section 3.
 - **Data in our DB:** what, how long, how users request deletion. Tell user it belongs in privacy policy.
 - **Logs / error tracking** storing IPs or emails: mention.

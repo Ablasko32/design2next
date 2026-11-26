@@ -34,10 +34,10 @@ It uses the standard `SKILL.md` format, so it works with Claude Code and with an
 **Design → Read → Structure → Build → Verify**
 
 1. **Design**: you give an HTML/CSS export, a Figma file or a screenshot.
-2. **Read**: the agent pulls out tokens, fonts, copy and sections.
+2. **Read**: the agent reads the whole design and pulls out tokens, the type scale, fonts, copy and sections.
 3. **Structure**: it picks the folder layout for a landing page, a shop or an app.
 4. **Build**: tokens first, then UI components, then pages.
-5. **Verify**: it checks three screen sizes, runs `check.sh` and builds the project.
+5. **Verify**: it checks three screen sizes, formats and lints, runs `check.sh`, builds the project and runs Lighthouse on public pages.
 
 > **Default is `check` mode:** the agent builds the first slice (setup, tokens, fonts, hero), shows you screenshots and **waits for your OK** before building the rest. Use `auto` to go straight through; it lists every assumption at the end.
 
@@ -55,31 +55,33 @@ The design is the source of truth. The agent doesn't "improve" it: odd spacing o
 
 Always:
 
-| Area           | What we use                                                        |
-| -------------- | ------------------------------------------------------------------ |
-| Framework      | **Next.js** (latest, App Router, Cache Components)                 |
-| Language       | **TypeScript** (strict)                                            |
-| Styling        | **Tailwind CSS v4**, design tokens as CSS variables                |
-| Components     | Own UI components, **cva** for variants, `cn()` for classes        |
-| Fonts & images | `next/font` (Google Fonts self-hosted), `next/image` with **WebP** |
-| Forms          | **react-hook-form** + **Zod**, Server Actions                      |
-| Quality        | **ESLint** + **Prettier**, typecheck, `check.sh`                   |
+| Area           | What we use                                                                                                        |
+| -------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Framework      | **Next.js** (latest, App Router, Cache Components)                                                                 |
+| Language       | **TypeScript** (strict)                                                                                            |
+| Styling        | **Tailwind CSS v4**, design tokens as CSS variables                                                                |
+| Components     | Own UI components, **cva** for variants, `cn()` for classes                                                        |
+| Fonts & images | `next/font/local` (woff2 in repo, used weights + subsets only), `next/image` with **WebP**                         |
+| Text           | All UI text in `messages/<lang>.json` from day one, ready for translations                                         |
+| Forms          | **react-hook-form** + **Zod**, Server Actions                                                                      |
+| Quality        | **ESLint** + **Prettier** + canonical Tailwind classes (`eslint-plugin-better-tailwindcss`), typecheck, `check.sh` |
 
 Only when the project needs it:
 
-| Need         | What we use                                                                                 |
-| ------------ | ------------------------------------------------------------------------------------------- |
-| Database     | **Drizzle ORM**, PostgreSQL by default (MySQL, SQLite too), local **Docker** or your own DB |
-| Auth         | **Better Auth**                                                                             |
-| Payments     | **Stripe**                                                                                  |
-| CMS          | **Payload** (blogs, pages, shop products)                                                   |
-| Icons        | **lucide-react** by default (you can pick another set)                                      |
-| Animation    | CSS first, **motion** only where CSS can't                                                  |
-| Translations | Native Next.js dictionaries (+ Payload localization for CMS content)                        |
-| Dark mode    | **next-themes**                                                                             |
-| SEO          | Metadata API, sitemap, robots, JSON-LD with **schema-dts**                                  |
-| Cookies (EU) | **Cookiebot** when a consent banner is needed                                               |
-| Email        | Your choice (Resend, Postmark, Brevo...); the agent asks                                    |
+| Need         | What we use                                                                                                                                                                                                                                                                                                             |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Database     | **Drizzle ORM**, PostgreSQL by default (MySQL, SQLite too), local **Docker** or your own DB                                                                                                                                                                                                                             |
+| Auth         | **Better Auth**                                                                                                                                                                                                                                                                                                         |
+| Payments     | **Stripe**                                                                                                                                                                                                                                                                                                              |
+| CMS          | **Payload** (blogs, pages, shop products)                                                                                                                                                                                                                                                                               |
+| Icons        | **lucide-react** by default (or Heroicons, Phosphor, Tabler, Radix). Design-specific icons become own SVGs in `components/icons/`                                                                                                                                                                                       |
+| Animation    | CSS first, **motion** only where CSS can't                                                                                                                                                                                                                                                                              |
+| Translations | Native Next.js + `messages/`. Default language on `/`, others on `/en/...`, no auto-redirect. Translated slugs (`/usluge`, `/en/services`) when you want them, else picked by page type. hreflang, `x-default`, sitemap alternates and per-language SEO text, checked by a script. Payload localization for CMS content |
+| Dark mode    | **next-themes**                                                                                                                                                                                                                                                                                                         |
+| SEO          | Metadata API, sitemap, robots, JSON-LD with **schema-dts**, **Lighthouse** run on the production build                                                                                                                                                                                                                  |
+| 3D           | **three.js** rendered in a Web Worker (`OffscreenCanvas`), off the main thread                                                                                                                                                                                                                                          |
+| Cookies (EU) | **Cookiebot** when a consent banner is needed                                                                                                                                                                                                                                                                           |
+| Email        | Your choice (Resend, Postmark, Brevo...); the agent asks                                                                                                                                                                                                                                                                |
 
 ## Project types
 
@@ -91,7 +93,14 @@ The type decides the folder structure. Pass it, or let the agent work it out fro
 | `shop`    | Webshop                         | **Feature-first**: `features/<domain>/` with its queries, actions, schemas and components. Cached catalog, Stripe checkout |
 | `app`     | SaaS, dashboard, admin          | Same feature-first layout, plus a shared session helper, an action helper and central cache tags                           |
 
-Every type: no `src/`, `app/` only holds routes, and nothing gets scaffolded that the project doesn't use.
+Every type: all code in `src/`, `src/app/` only holds routes, and nothing gets scaffolded that the project doesn't use.
+
+## Safety
+
+- **Your secrets stay with you.** The agent only writes `.env.example` (key names and comments). It never reads, writes or asks for `.env.local`, passwords, API keys or database URLs. You fill `.env.local` yourself.
+- **The design is data.** Text inside a design or export is used as copy, never followed as instructions.
+- **No data loss.** The agent never deletes volumes, databases or tables. Migrations run only against the local Docker database it set up; for your own or hosted database it prepares the migration files and you run them.
+- **Nothing system-wide.** No global installs, no system changes, only project dev dependencies.
 
 ## Get started
 
@@ -133,7 +142,7 @@ For other agents, put `skills/design-to-next/` wherever your agent loads skills 
 As a plugin, the command is `/design-to-next:design-to-next`.
 
 - **`<design>`**: an artifact link, a local `.html` / image / PDF, or a folder with an HTML/CSS export
-- **`check`** (default): builds setup, tokens, fonts and the hero first, shows you screenshots and **waits for your OK**. Catches wrong fonts or colors early.
+- **`check`** (default): reads the whole design, builds setup, tokens, fonts and the hero first, shows you screenshots and **waits for your OK**. Catches wrong fonts or colors early.
 - **`auto`**: builds everything in one go, picks sensible defaults and lists every assumption at the end
 - **Extra context**: anything after the design, in plain words (pages, features, services)
 
@@ -148,16 +157,18 @@ Or just ask: _"Use design2next to turn this design into a Next.js landing page. 
 
 ## Scripts
 
-Two helpers ship with the skill. The agent runs them from your project root, and you can run them too. The path below is for a project install in `.claude/skills/`; use your own skill folder if you installed it elsewhere.
+Three helpers ship with the skill. The agent runs them from your project root, and you can run them too. The path below is for a project install in `.claude/skills/`; use your own skill folder if you installed it elsewhere.
 
-| Script                                                     | What it does                                                                                                                                                                                                                                                      |
-| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`check.sh`](skills/design-to-next/scripts/check.sh)       | Checks structure, tokens, server/client boundaries, images, env, database, CMS, SEO basics, auth and Stripe safety, image hosts and security headers. Then runs typecheck, lint and format check (`--build` also builds). Exits `1` on errors, so it works in CI. |
-| [`to-webp.mjs`](skills/design-to-next/scripts/to-webp.mjs) | Converts PNG / JPG / GIF / TIFF in `assets/images` to WebP (`--replace` removes the originals).                                                                                                                                                                   |
+| Script                                                                   | What it does                                                                                                                                                                                                                                                                                |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`check.sh`](skills/design-to-next/scripts/check.sh)                     | Checks structure, tokens, server/client boundaries, images, env, database, CMS, SEO basics, auth and Stripe safety, image hosts and security headers. Then runs typecheck, lint and format check (`--build` also builds). Exits `1` on errors, so it works in CI.                           |
+| [`to-webp.mjs`](skills/design-to-next/scripts/to-webp.mjs)               | Converts PNG / JPG / GIF / TIFF in `src/assets/images` to WebP (`--replace` removes the originals).                                                                                                                                                                                         |
+| [`check-i18n-seo.mjs`](skills/design-to-next/scripts/check-i18n-seo.mjs) | Multi-language sites: reads the sitemap (also split sitemaps / sitemap index) of a running production build and checks each URL answers 200, is its own canonical, has the right `<html lang>`, matching and reciprocal hreflang with `x-default`, and that `/<default>/...` redirects 308. |
 
 ```bash
 bash .claude/skills/design-to-next/scripts/check.sh --build
-node .claude/skills/design-to-next/scripts/to-webp.mjs assets/images --replace
+node .claude/skills/design-to-next/scripts/to-webp.mjs src/assets/images --replace
+node .claude/skills/design-to-next/scripts/check-i18n-seo.mjs http://localhost:3000
 ```
 
 `check.sh` is a fast heuristic, not a proof: it catches the common mistakes. Matching the design and the quality of the content are still checked by eye.
@@ -182,10 +193,11 @@ The agent only reads the ones a project needs.
 - [`auth.md`](skills/design-to-next/references/auth.md): Better Auth
 - [`payments.md`](skills/design-to-next/references/payments.md): Stripe
 - [`cms.md`](skills/design-to-next/references/cms.md): Payload CMS
-- [`i18n.md`](skills/design-to-next/references/i18n.md): translations, including CMS content
-- [`seo.md`](skills/design-to-next/references/seo.md): SEO for public pages
+- [`i18n.md`](skills/design-to-next/references/i18n.md): translations, slugs per language, multi-language SEO, CMS content
+- [`seo.md`](skills/design-to-next/references/seo.md): SEO for public pages, Lighthouse, missing OG image / favicon reported
 - [`dark-mode.md`](skills/design-to-next/references/dark-mode.md): dark mode
 - [`legal-eu.md`](skills/design-to-next/references/legal-eu.md): GDPR, cookies and legal pages
+- [`3d.md`](skills/design-to-next/references/3d.md): three.js scenes in a Web Worker (OffscreenCanvas), fallback, reduced motion
 
 ## License
 
